@@ -93,6 +93,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 #include "list.h"
 
 /* Structures and functions required for internal implementation. These need
@@ -130,7 +131,7 @@ pair_delete(struct pair *PAIR)
     /* Make sure any data stored in PAIR->value is freed prior to calling this
      * function. */
 {
-    if (!PAIR) return -1;
+    assert(PAIR);
     /* >>>>> Begin key-specific code */
     free(PAIR->key);
     /* <<<<< End key-specific code */
@@ -201,7 +202,7 @@ hash_delete(struct hash *HASH)
      * hash_create. */
 {
     unsigned int n;
-    if (!HASH) return;
+    assert(HASH);
     for (n = 0; n < HASH->size; n++) {
         struct list *list = (HASH->table)[n];
         if (list) list_delete(list);
@@ -216,7 +217,8 @@ hash_find(struct hash *HASH, void *KEY)
 {
     struct list *list = NULL;
     void *head = NULL;
-    if (!HASH || !KEY) return NULL;
+    assert(HASH);
+    assert(KEY);
     list = (HASH->table)[hash_map(HASH, KEY)];
     if (list_empty(list)) return NULL;
     head = list_head(list);
@@ -235,12 +237,13 @@ hash_insert(struct hash *HASH, void *KEY, void *DATA)
      * decision to push DATA onto the front or onto the back of its designated
      * bucket is arbitrary. By pushing it onto the front, though, we benefit if
      * it is referenced in the near future where it will quickly be found near
-     * the front of the bucket. Returns -1 on error or if KEY is already in
-     * HASH. */
+     * the front of the bucket. Returns -1 if KEY is already in HASH. */
 {
     struct pair *pair = NULL;
     struct list *list = NULL;
-    if (!HASH || !KEY || hash_find(HASH, KEY) != NULL) return -1;
+    assert(HASH);
+    assert(KEY);
+    if (hash_find(HASH, KEY)) return -1;
     list = (HASH->table)[hash_map(HASH, KEY)];
     list_push_front(list, pair_create(HASH, KEY, DATA));
     return 0;
@@ -248,11 +251,13 @@ hash_insert(struct hash *HASH, void *KEY, void *DATA)
 
     void
 hash_remove(struct hash *HASH, void *KEY)
-    /* Remove the data referenced by KEY from HASH */
+    /* Remove the data referenced by KEY from HASH or silently returns if HASH
+     * contains no such KEY */
 {
     struct list *list = NULL;
     void *head = NULL;
-    if (!HASH || !KEY) return;
+    assert(HASH);
+    assert(KEY);
     list = (HASH->table)[hash_map(HASH, KEY)];
     if (list_empty(list)) return;
     head = list_head(list);
@@ -278,7 +283,10 @@ hash_combine(struct hash *GLOBAL, struct hash *LOCAL, unsigned int SIZE)
     struct hash *hash = NULL;
     struct list *list = NULL;
     struct pair *pair = NULL;
-    if (!GLOBAL || !LOCAL || GLOBAL->delete != LOCAL->delete) return NULL;
+    assert(GLOBAL);
+    assert(LOCAL);
+    assert(GLOBAL->delete);
+    assert(LOCAL->delete);
     hash = hash_create(GLOBAL->delete, SIZE);
     /* First add the contents of LOCAL */
     for (index = 0; index < LOCAL->size; index++) {
