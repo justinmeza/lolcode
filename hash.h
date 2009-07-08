@@ -267,41 +267,4 @@ hash_remove(struct hash *HASH, void *KEY)
     while (list_head(list) != head);
 }
 
-    struct hash *
-hash_combine(struct hash *GLOBAL, struct hash *LOCAL, unsigned int SIZE)
-    /* Combines the pointers to data (not the data itself) from GLOBAL and
-     * LOCAL. When data referenced by the same key appears in both hash
-     * objects, the data in LOCAL will be present in the returned hash. */
-{
-    unsigned int index;
-    void *head = NULL;
-    struct hash *hash = NULL;
-    struct list *list = NULL;
-    struct pair *pair = NULL;
-    if (!GLOBAL || !LOCAL || GLOBAL->delete != LOCAL->delete) return NULL;
-    hash = hash_create(GLOBAL->delete, SIZE);
-    /* First add the contents of LOCAL */
-    for (index = 0; index < LOCAL->size; index++) {
-        list = LOCAL->table[index];
-        if (!(head = list_head(list))) continue;
-        do {
-            pair = list_head(list);
-            hash_insert(hash, pair->key, pair->value);
-        }
-        while (list_head(list) != list);
-    }
-    /* Then, add the contents of GLOBAL if not already present */
-    for (index = 0; index < GLOBAL->size; index++) {
-        list = LOCAL->table[index];
-        if (!(head = list_head(list))) continue;
-        do {
-            pair = list_head(list);
-            if (!hash_find(hash, pair->key))
-                hash_insert(hash, pair->key, pair->value);
-        }
-        while (list_head(list) != list);
-    }
-    return hash;
-}
-
 #endif /* __HASH__ */
