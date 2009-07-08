@@ -88,6 +88,8 @@
 #ifndef __LIST__
 #define __LIST__
 
+#include <assert.h>
+
 /* Structures and functions required for internal implementation. These need
  * not be dealt with directly. */
 
@@ -119,7 +121,7 @@ item_create(void *DATA)
 item_delete(struct list *LIST, struct item *ITEM)
     /* Calls ITEM's delete function and then frees ITEM */
 {
-    if (!ITEM) return;
+    assert(ITEM);
     if (ITEM->data) LIST->delete(ITEM->data);
     free(ITEM);
 }
@@ -159,7 +161,7 @@ list_delete(struct list *LIST)
 {
     struct item *current = NULL;
     struct item *next = NULL;
-    if (!LIST) return;
+    assert(LIST);
     /* Iterate through LIST and delete all items */
     current = LIST->head;
     while (current) {
@@ -172,27 +174,27 @@ list_delete(struct list *LIST)
 
     int
 list_empty(struct list *LIST)
-    /* Returns a value greater than 0 if LIST is non-empty, 0 if the list is
-     * empty and -1 if an error occurs. */
+    /* Returns a value greater than 0 if LIST is non-empty */
 {
-    if (!LIST) return -1;
+    assert(LIST);
     return !LIST->size;
 }
 
     int
 list_size(struct list *LIST)
-    /* Returns the number of elements in a list or -1 on error */
+    /* Returns the number of elements in a list */
 {
-    if (!LIST) return -1;
+    assert(LIST);
     return LIST->size;
 }
 
     int
 list_shift_down(struct list *LIST)
     /* Makes the head item the tail, shifting all items toward the head.
-     * Returns -1 on error and the size of the list on success.  */
+     * Returns the size of the list.  */
 {
-    if (!LIST || list_empty(LIST)) return -1;
+    assert(LIST);
+    assert(!list_empty(LIST));
     if (LIST->head == LIST->tail) return 1;
     else {
         struct item *save = LIST->head->next;
@@ -209,9 +211,10 @@ list_shift_down(struct list *LIST)
     int
 list_shift_up(struct list *LIST)
     /* Makes the tail item the head, shifting all items toward the tail.
-     * Returns -1 on error and the size of the list on success. */
+     * Returns the size of the list. */
 {
-    if (!LIST || list_empty(LIST)) return -1;
+    assert(LIST);
+    assert(!list_empty(LIST));
     if (LIST->head == LIST->tail) return 1;
     else {
         struct item *save = LIST->tail->prev;
@@ -228,11 +231,10 @@ list_shift_up(struct list *LIST)
     int
 list_push_back(struct list *LIST,
         void *DATA)
-    /* Pushes DATA onto the back of LIST and returns its new size, or returns
-     * -1 on error. */
+    /* Pushes DATA onto the back of LIST and returns its new size */
 {
     struct item *item = NULL;
-    if (!LIST) return -1;
+    assert(LIST);
     item = item_create(DATA);
     if (list_empty(LIST)) {
         item->next = NULL;
@@ -251,11 +253,10 @@ list_push_back(struct list *LIST,
 
     int
 list_push_front(struct list *LIST, void *DATA)
-    /* Pushes DATA onto the front of LIST and returns its new size, or returns
-     * -1 on error. */
+    /* Pushes DATA onto the front of LIST and returns its new size */
 {
     struct item *item = NULL;
-    if (!LIST) return -1;
+    assert(LIST);
     item = item_create(DATA);
     if (item) {
         if (list_empty(LIST)) {
@@ -277,11 +278,10 @@ list_push_front(struct list *LIST, void *DATA)
 
     int
 list_pop_front(struct list *LIST)
-    /* Removes and deletes an item from the front of LIST and returns its new
-     * size or returns -1 on error. */
+    /* Deletes the first item of LIST and returns LIST's new size */
 {
     struct item *item = NULL;
-    if (!LIST) return -1;
+    assert(LIST);
     item = LIST->head;
     if (LIST->head == LIST->tail) {
         LIST->head = NULL;
@@ -300,11 +300,10 @@ list_pop_front(struct list *LIST)
 
     int
 list_pop_back(struct list *LIST)
-    /* Removes and deletes an item from the back of LIST and returns its new
-     * size or returns -1 on error. */
+    /* Deletes the last item of LIST and returns LIST's new size */
 {
     struct item *item = NULL;
-    if (!LIST) return -1;
+    assert(LIST);
     item = LIST->tail;
     if (LIST->head == LIST->tail) {
         LIST->head = NULL;
@@ -323,17 +322,19 @@ list_pop_back(struct list *LIST)
 
     void *
 list_head(struct list *LIST)
-    /* Returns the data stored in the item at the head of LIST */
+    /* Returns the data stored in the first item of LIST */
 {
-    if (!LIST || !LIST->head) return NULL;
+    assert(LIST);
+    assert(LIST->head);
     return LIST->head->data;
 }
 
     void *
 list_tail(struct list *LIST)
-    /* Returns the data stored in the item at the tail of LIST */
+    /* Returns the data stored in the last item of LIST */
 {
-    if (!LIST || !LIST->tail) return NULL;
+    assert(LIST);
+    assert(LIST->tail);
     return LIST->tail->data;
 }
 
@@ -342,7 +343,7 @@ list_print(struct list *LIST)
     /* Displays the addresses and linkage of a list */
 {
     struct item *item;
-    if (!LIST) return;
+    assert(LIST);
     item = LIST->head;
     printf("======\n");
     printf("<LIST> Size: %4d\n", list_size(LIST));
