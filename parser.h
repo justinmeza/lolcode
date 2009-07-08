@@ -405,8 +405,7 @@ parser_cmp(struct parser *PARSER, const char *TOKEN)
     token = parser_get(PARSER);
     if (!token) return 0;
     /* Check for null tokens and token string equality */
-    if ((!TOKEN && !token->null)
-            || (TOKEN && strcmp(TOKEN, token->data))) {
+    if ((!TOKEN && !token->null) || (TOKEN && strcmp(TOKEN, token->data))) {
         list_push_front(PARSER->tokens, token);
         return 0;
     }
@@ -436,7 +435,7 @@ parser_cmp_at(struct parser *PARSER, int POS, const char *TOKEN)
 }
 
     int
-parser_cmp_peek(struct parser *PARSER, struct token *TOKEN)
+parser_cmp_peek(struct parser *PARSER, const char *TOKEN)
     /* Performs the same action as parser_cmp but does not modify the token
      * stream in any case. */
 {
@@ -444,7 +443,7 @@ parser_cmp_peek(struct parser *PARSER, struct token *TOKEN)
     if (!PARSER || !TOKEN || !PARSER->tokens || !PARSER->tokens->head)
         return 0;
     token = (struct token *)list_head(PARSER->tokens);
-    if ((TOKEN->null && !token->null) || strcmp(TOKEN->data, token->data))
+    if ((!TOKEN && !token->null) || (TOKEN && strcmp(TOKEN, token->data)))
         return 0;
     return 1;
 }
