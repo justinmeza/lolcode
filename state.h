@@ -71,6 +71,7 @@
 #ifndef __STATE__
 #define __STATE__
 
+#include <assert.h>
 #include "hash.h"
 #include "list.h"
 
@@ -98,7 +99,7 @@ state_create(void (*DELETE)(void *), unsigned int SIZE)
 {
     struct state *state = NULL;
     struct hash *hash = NULL;
-    if (!DELETE) return NULL;
+    assert(DELETE);
     state = malloc(sizeof(struct state));
     state->data = list_create(data_delete_hash);
     state->size = SIZE;
@@ -112,7 +113,7 @@ state_create(void (*DELETE)(void *), unsigned int SIZE)
 state_delete(struct state *STATE)
     /* Deletes a state and all its data */
 {
-    if (!STATE) return;
+    assert(STATE);
     list_delete(STATE->data);
     free(STATE);
 }
@@ -122,7 +123,7 @@ state_save(struct state *STATE)
     /* Saves the current state. Restore it later with state_restore. */
 {
     struct hash *hash = NULL;
-    if (!STATE) return;
+    assert(STATE);
     hash = hash_create(STATE->delete, STATE->size);
     list_push_front(STATE->data, hash);
 }
@@ -131,7 +132,8 @@ state_save(struct state *STATE)
 state_restore(struct state *STATE)
     /* Restores a state saved with state_save. */
 {
-    if (!STATE || list_empty(STATE->data)) return;
+    assert(STATE);
+    assert(!list_empty(STATE->data));
     list_pop_front(STATE->data);
 }
 
@@ -144,9 +146,10 @@ state_find(struct state *STATE, void *KEY, unsigned int DEPTH)
     struct list *list = NULL;
     void *head = NULL, *data = NULL;
     unsigned int depth = 0;
-    if (!STATE || !KEY) return NULL;
+    assert(STATE);
+    assert(KEY);
     list = STATE->data;
-    if (DEPTH > list->size) return NULL;
+    assert(DEPTH <= list->size);
     head = list_head(list);
     do {
         struct hash *hash = (struct hash *)list_head(list);
@@ -166,7 +169,8 @@ state_read(struct state *STATE, void *KEY)
 {
     struct list *list = NULL;
     void *head = NULL, *data = NULL;
-    if (!STATE || !KEY) return NULL;
+    assert(STATE);
+    assert(KEY);
     list = STATE->data;
     head = list_head(list);
     do {
@@ -188,7 +192,8 @@ state_write(struct state *STATE, void *KEY, void *DATA)
     struct list *list = NULL;
     void *head = NULL;
     int found = 0;
-    if (!STATE || !KEY) return;
+    assert(STATE);
+    assert(KEY);
     list = STATE->data;
     head = list_head(list);
     do {
@@ -214,7 +219,8 @@ state_insert(struct state *STATE, void *KEY, void *DATA)
     struct list *list = NULL;
     struct hash *hash = NULL;
     int found = 0;
-    if (!STATE || !KEY) return;
+    assert(STATE);
+    assert(KEY);
     list = STATE->data;
     hash = (struct hash *)list_head(list);
     if (!hash_find(hash, KEY)) hash_insert(hash, KEY, DATA);
