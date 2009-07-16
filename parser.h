@@ -440,18 +440,16 @@ parser_cmp_at(struct parser *PARSER, int POS, const char *TOKEN)
 }
 
     int
-parser_cmp_peek(struct parser *PARSER, struct token *TOKEN)
+parser_cmp_peek(struct parser *PARSER, const char *TOKEN)
     /* Performs the same action as parser_cmp but does not modify the token
      * stream in any case. */
 {
     struct token *token = NULL;
     assert(PARSER);
-    assert(TOKEN);
     assert(PARSER->tokens);
     assert(PARSER->tokens->head);
     token = (struct token *)list_head(PARSER->tokens);
-    if ((TOKEN->null && !token->null) || strcmp(TOKEN->data, token->data))
-        return 0;
+    if ((!TOKEN && !token->null) || strcmp(TOKEN, token->data)) return 0;
     return 1;
 }
 
