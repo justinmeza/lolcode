@@ -50,6 +50,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <assert.h>
 #include "hash.h"
 #include "list.h"
 #include "state.h"
@@ -94,7 +95,7 @@ error(struct parser *PARSER, char *MESSAGE)
     /* Prints error messages and sets the state of the ERROR structure */
 {
     struct token *token;
-    if (!PARSER) return;
+    assert(PARSER);
     token = (struct token *)list_head(PARSER->tokens);
     if (token) {
         if (token->null) fprintf(stderr, "%s:%d: %s: at end of line.\n",
@@ -119,7 +120,8 @@ token_to_troof(struct token *TOKEN)
      * allocated. */
 {
     troof data;
-    if (!TOKEN || !TOKEN->data) return NULL;
+    assert(TOKEN);
+    assert(TOKEN->data);
     if (!strcmp(TOKEN->data, "WIN"))
         data = WIN;
     else if (!strcmp(TOKEN->data, "FAIL"))
@@ -136,7 +138,8 @@ token_to_numbr(struct token *TOKEN)
 {
     numbr data = 0;
     int pos, neg = 0;
-    if (!TOKEN || !TOKEN->data) return NULL;
+    assert(TOKEN);
+    assert(TOKEN->data);
     for (pos = 0; TOKEN->data[pos] != 0; pos++) {
         if (pos == 0 && TOKEN->data[pos] == '-') {
             neg = 1;
@@ -158,7 +161,8 @@ token_to_numbar(struct token *TOKEN)
 {
     numbar data = 0.0;
     int pos, neg = 0, dec = 0;
-    if (!TOKEN || !TOKEN->data) return NULL;
+    assert(TOKEN);
+    assert(TOKEN->data);
     for (pos = 0; TOKEN->data[pos] != 0; pos++) {
         if (pos == 0 && TOKEN->data[pos] == '-') {
             neg = 1;
@@ -195,8 +199,9 @@ token_to_yarn(struct parser *PARSER, struct state *VARS, struct token *TOKEN)
     int n;                              /* Tracks token position */
     int i;                              /* Tracks value position */
     /* Check for YARN format */
-    if (!TOKEN || !TOKEN->data || TOKEN->data[0] != '"'
-            || !(len = strlen(TOKEN->data))
+    assert(TOKEN);
+    assert(TOKEN->data);
+    if (TOKEN->data[0] != '"' || !(len = strlen(TOKEN->data))
             || TOKEN->data[len - 1] != '"')
         return NULL;
     /* Copy characters, removing quotes */
@@ -375,7 +380,9 @@ evaluate_parser(struct parser *PARSER, struct state *VARS, struct hash *LOOPS)
      * state of the program are not modified but are visible to the evaluated
      * code. Returns 0 if the entire parser was evaluated, and 1 otherwise. */
 {
-    if (!PARSER || !VARS || !LOOPS) return 1;
+    assert(PARSER);
+    assert(VARS);
+    assert(LOOPS);
 
     /* HAI <VERSION> */
     if (!parser_cmp(PARSER, "HAI")) {
@@ -422,7 +429,7 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS)
 {
     struct token *token;
     struct value *value;
-    if (!PARSER) return NULL;
+    assert(PARSER);
 
     /* VISIBLE */
     if (parser_cmp(PARSER, "VISIBLE")) {
