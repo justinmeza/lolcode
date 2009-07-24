@@ -34,6 +34,7 @@
 #ifndef __LOLFUNC__
 #define __LOLFUNC__
 
+#include <assert.h>
 #include "loltypes.h"
 
 /* LOLCODE standard functions */
@@ -48,7 +49,8 @@
 func_sumof(struct value *LEFT, struct value *RIGHT)
 {
     /* Sanity check */
-    if (!LEFT || !RIGHT) return NULL;
+    assert(LEFT);
+    assert(RIGHT);
     /* Make sure types are correct */
     if (LEFT->type != NUMBR && LEFT->type != NUMBAR) return NULL;
     if (RIGHT->type != NUMBR && RIGHT->type != NUMBAR) return NULL;
@@ -74,7 +76,8 @@ func_sumof(struct value *LEFT, struct value *RIGHT)
     struct value *
 func_diffof(struct value *LEFT, struct value *RIGHT)
 {
-    if (!LEFT || !RIGHT) return NULL;
+    assert(LEFT);
+    assert(RIGHT);
     if (LEFT->type != NUMBR && LEFT->type != NUMBAR) return NULL;
     if (RIGHT->type != NUMBR && RIGHT->type != NUMBAR) return NULL;
     if (LEFT->type == NUMBR) {
@@ -97,7 +100,8 @@ func_diffof(struct value *LEFT, struct value *RIGHT)
     struct value *
 func_produktof(struct value *LEFT, struct value *RIGHT)
 {
-    if (!LEFT || !RIGHT) return NULL;
+    assert(LEFT);
+    assert(RIGHT);
     if (LEFT->type != NUMBR && LEFT->type != NUMBAR) return NULL;
     if (RIGHT->type != NUMBR && RIGHT->type != NUMBAR) return NULL;
     if (LEFT->type == NUMBR) {
@@ -120,7 +124,8 @@ func_produktof(struct value *LEFT, struct value *RIGHT)
     struct value *
 func_quoshuntof(struct value *LEFT, struct value *RIGHT)
 {
-    if (!LEFT || !RIGHT) return NULL;
+    assert(LEFT);
+    assert(RIGHT);
     if (LEFT->type != NUMBR && LEFT->type != NUMBAR) return NULL;
     if (RIGHT->type != NUMBR && RIGHT->type != NUMBAR) return NULL;
     if (LEFT->type == NUMBR) {
@@ -143,7 +148,8 @@ func_quoshuntof(struct value *LEFT, struct value *RIGHT)
     struct value *
 func_modof(struct value *LEFT, struct value *RIGHT)
 {
-    if (!LEFT || !RIGHT) return NULL;
+    assert(LEFT);
+    assert(RIGHT);
     if (LEFT->type != NUMBR) return NULL;
     if (RIGHT->type != NUMBR) return NULL;
     return value_create_numbr(value_get_numbr(LEFT) % value_get_numbr(RIGHT));
@@ -152,7 +158,8 @@ func_modof(struct value *LEFT, struct value *RIGHT)
     struct value *
 func_biggrof(struct value *LEFT, struct value *RIGHT)
 {
-    if (!LEFT || !RIGHT) return NULL;
+    assert(LEFT);
+    assert(RIGHT);
     if (LEFT->type != NUMBR && LEFT->type != NUMBAR) return NULL;
     if (RIGHT->type != NUMBR && RIGHT->type != NUMBAR) return NULL;
     if (LEFT->type == NUMBR) {
@@ -185,7 +192,8 @@ func_biggrof(struct value *LEFT, struct value *RIGHT)
     struct value *
 func_smallrof(struct value *LEFT, struct value *RIGHT)
 {
-    if (!LEFT || !RIGHT) return NULL;
+    assert(LEFT);
+    assert(RIGHT);
     if (LEFT->type != NUMBR && LEFT->type != NUMBAR) return NULL;
     if (RIGHT->type != NUMBR && RIGHT->type != NUMBAR) return NULL;
     if (LEFT->type == NUMBR) {
@@ -218,7 +226,8 @@ func_smallrof(struct value *LEFT, struct value *RIGHT)
     struct value *
 func_bothof(struct value *LEFT, struct value *RIGHT)
 {
-    if (!LEFT || !RIGHT) return NULL;
+    assert(LEFT);
+    assert(RIGHT);
     if (LEFT->type != TROOF) return NULL;
     if (RIGHT->type != TROOF) return NULL;
     return value_create_troof(value_get_troof(LEFT)
@@ -228,7 +237,8 @@ func_bothof(struct value *LEFT, struct value *RIGHT)
     struct value *
 func_eitherof(struct value *LEFT, struct value *RIGHT)
 {
-    if (!LEFT || !RIGHT) return NULL;
+    assert(LEFT);
+    assert(RIGHT);
     if (LEFT->type != TROOF) return NULL;
     if (RIGHT->type != TROOF) return NULL;
     return value_create_troof(value_get_troof(LEFT)
@@ -238,7 +248,8 @@ func_eitherof(struct value *LEFT, struct value *RIGHT)
     struct value *
 func_wonof(struct value *LEFT, struct value *RIGHT)
 {
-    if (!LEFT || !RIGHT) return NULL;
+    assert(LEFT);
+    assert(RIGHT);
     if (LEFT->type != TROOF) return NULL;
     if (RIGHT->type != TROOF) return NULL;
     return value_create_troof(value_get_troof(LEFT)
@@ -248,7 +259,8 @@ func_wonof(struct value *LEFT, struct value *RIGHT)
     struct value *
 func_bothsaem(struct value *LEFT, struct value *RIGHT)
 {
-    if (!LEFT || !RIGHT) return NULL;
+    assert(LEFT);
+    assert(RIGHT);
     if (LEFT->type != NUMBR && LEFT->type != NUMBAR) return NULL;
     if (RIGHT->type != NUMBR && RIGHT->type != NUMBAR) return NULL;
     if (LEFT->type == NUMBR) {
@@ -281,7 +293,8 @@ func_bothsaem(struct value *LEFT, struct value *RIGHT)
     struct value *
 func_diffrint(struct value *LEFT, struct value *RIGHT)
 {
-    if (!LEFT || !RIGHT) return NULL;
+    assert(LEFT);
+    assert(RIGHT);
     if (LEFT->type != NUMBR && LEFT->type != NUMBAR) return NULL;
     if (RIGHT->type != NUMBR && RIGHT->type != NUMBAR) return NULL;
     if (LEFT->type == NUMBR) {
@@ -316,7 +329,8 @@ func_smoosh(struct value *LEFT, struct value *RIGHT)
 {
     struct value *value = NULL;
     yarn total = NULL;
-    if (!LEFT || !RIGHT) return NULL;
+    assert(LEFT);
+    assert(RIGHT);
     if (LEFT->type != YARN) return NULL;
     if (RIGHT->type != YARN) return NULL;
     total = malloc(sizeof(char) * (strlen(LEFT->data) + strlen(RIGHT->data) + 1));
@@ -335,7 +349,8 @@ func_foldl(struct list *LIST,
     /* Applies FUNCTION to all items in LIST from left to right */
 {
     struct value *value = NULL;
-    if (!LIST || !FUNCTION) return NULL;
+    assert(LIST);
+    assert(FUNCTION);
     value = value_copy(list_head(LIST));
     list_pop_front(LIST);
     while (!list_empty(LIST)) {
@@ -360,7 +375,8 @@ func_foldl_short(struct list *LIST,
      * when the accumulator is the same as the value stored in VALUE. */
 {
     struct value *value = NULL;
-    if (!LIST || !FUNCTION) return NULL;
+    assert(LIST);
+    assert(FUNCTION);
     value = value_copy(list_head(LIST));
     list_pop_front(LIST);
     while (!list_empty(LIST) && !value_cmp(VALUE, value)) {
@@ -384,7 +400,8 @@ func_foldr(struct list *LIST,
     /* Applies FUNCTION to all items in LIST' from right to left */
 {
     struct value *value = NULL;
-    if (!LIST || !FUNCTION) return NULL;
+    assert(LIST);
+    assert(FUNCTION);
     value = value_copy(list_tail(LIST));
     list_pop_back(LIST);
     while (!list_empty(LIST)) {
@@ -409,7 +426,8 @@ func_foldr_short(struct list *LIST,
      * when the accumulator is the same as the value stored in VALUE. */
 {
     struct value *value = NULL;
-    if (!LIST || !FUNCTION) return NULL;
+    assert(LIST);
+    assert(FUNCTION);
     value = value_copy(list_tail(LIST));
     list_pop_back(LIST);
     while (!list_empty(LIST) && !value_cmp(VALUE, value)) {
