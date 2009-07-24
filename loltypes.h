@@ -39,6 +39,8 @@
 #ifndef __LOLTYPES__
 #define __LOLTYPES__
 
+#include <assert.h>
+
 /* Structures and functions required for internal implementation. These need
  * not be dealt with directly. */
 
@@ -70,28 +72,32 @@ struct value {
     troof
 value_get_troof(struct value *VALUE)
 {
-    if (!VALUE || VALUE->type != TROOF) return FAIL;
+    assert(VALUE);
+    assert(VALUE->type == TROOF);
     return *((troof *)(VALUE->data));
 }
 
     numbr
 value_get_numbr(struct value *VALUE)
 {
-    if (!VALUE || VALUE->type != NUMBR) return 0;
+    assert(VALUE);
+    assert(VALUE->type == NUMBR);
     return *((numbr *)(VALUE->data));
 }
 
     numbar
 value_get_numbar(struct value *VALUE)
 {
-    if (!VALUE || VALUE->type != NUMBAR) return 0.0;
+    assert(VALUE);
+    assert(VALUE->type == NUMBAR);
     return *((numbar *)(VALUE->data));
 }
 
     yarn
 value_get_yarn(struct value *VALUE)
 {
-    if (!VALUE || VALUE->type != YARN) return 0;
+    assert(VALUE);
+    assert(VALUE->type == YARN);
     return ((yarn)(VALUE->data));
 }
 
@@ -159,10 +165,10 @@ value_cast_troof(struct value *VALUE)
 {
     struct value *value = NULL;
     troof data;
-    if (!VALUE) return NULL;
+    assert(VALUE);
     /* NOOB to TROOF */
     /* TROOF to TROOF */
-    else if (VALUE->type == TROOF)
+    if (VALUE->type == TROOF)
         data = value_get_troof(VALUE);
     /* NUMBR to TROOF */
     else if (VALUE->type == NUMBR) {
@@ -179,7 +185,8 @@ value_cast_troof(struct value *VALUE)
         if (!strcmp(value_get_yarn(VALUE), "")) data = FAIL;
         else data = WIN;
     }
-    else return NULL;
+    /* Invalid type */
+    else assert(0);
     value = malloc(sizeof(struct value));
     value->type = TROOF;
     value->data = malloc(sizeof(enum troof));
@@ -192,7 +199,7 @@ value_cast_numbr(struct value *VALUE)
 {
     struct value *value = NULL;
     numbr data;
-    if (!VALUE) return NULL;
+    assert(VALUE);
     data = value_get_numbr(VALUE);
     /* NOOB to NUMBR */
     /* TROOF to NUMBR */
@@ -221,7 +228,8 @@ value_cast_numbr(struct value *VALUE)
         }
         if (neg) data *= -1;
     }
-    else return NULL;
+    /* Invalid type */
+    else assert(0);
     value = malloc(sizeof(struct value));
     value->type = NUMBR;
     value->data = malloc(sizeof(numbr));
@@ -234,7 +242,7 @@ value_cast_numbar(struct value *VALUE)
 {
     struct value *value = NULL;
     numbar data;
-    if (!VALUE) return NULL;
+    assert(VALUE);
     /* NOOB to NUMBAR */
     /* TROOF to NUMBAR */
     if (VALUE->type == TROOF)
@@ -273,7 +281,8 @@ value_cast_numbar(struct value *VALUE)
         }
         if (neg) data *= -1.0;
     }
-    else return NULL;
+    /* Invalid type */
+    else assert(0);
     value = malloc(sizeof(struct value));
     value->type = NUMBAR;
     value->data = malloc(sizeof(numbar));
@@ -286,7 +295,7 @@ value_cast_yarn(struct value *VALUE)
 {
     struct value *value = NULL;
     yarn data;
-    if (!VALUE) return NULL;
+    assert(VALUE);
     /* NOOB to YARN */
     if (VALUE->type == NOOB) {
         data = malloc(sizeof(char));
@@ -358,7 +367,8 @@ value_cast_yarn(struct value *VALUE)
         data = malloc(sizeof(char) * (strlen(value_get_yarn(VALUE)) + 1));
         strcpy(data, value_get_yarn(VALUE));
     }
-    else return NULL;
+    /* Invalid type */
+    else assert(0);
     value = malloc(sizeof(struct value));
     value->type = YARN;
     value->data = data;
@@ -371,7 +381,10 @@ value_cast_yarn(struct value *VALUE)
 value_cmp(struct value *LEFT, struct value *RIGHT)
     /* Compares the contents of two similarly-typed value structures */
 {
-    if (!LEFT || !RIGHT || LEFT->type != RIGHT->type) return 0;
+    assert(LEFT);
+    assert(RIGHT);
+    assert(LEFT->type);
+    assert(RIGHT->type);
     switch (LEFT->type) {
         case NOOB: return 1;
         case TROOF:
@@ -391,7 +404,8 @@ value_cmp(struct value *LEFT, struct value *RIGHT)
 value_copy(struct value *VALUE)
     /* Returns a copy of the contents of VALUE */
 {
-    if (!VALUE || !VALUE->data) return NULL;
+    assert(VALUE);
+    assert(VALUE->data);
     switch (VALUE->type) {
         case NOOB:
             return value_create_noob();
@@ -410,7 +424,7 @@ value_copy(struct value *VALUE)
     void
 value_delete(struct value *VALUE)
 {
-    if (!VALUE) return;
+    assert(VALUE);
     if (VALUE->data) free(VALUE->data);
     free(VALUE);
 }

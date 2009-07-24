@@ -119,6 +119,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 #include "getline.h" /* A portable `getline' function, slightly modified */
 #include "list.h"
 
@@ -214,7 +215,7 @@ token_delete(void *TOKEN)
     /* Properly deletes a token by freeing it as well as the value it holds */
 {
     struct token *token = (struct token *)TOKEN;
-    if (!TOKEN) return;
+    assert(TOKEN);
     if (token->data) free(token->data);
     free(TOKEN);
 }
@@ -279,7 +280,7 @@ parser_delete(struct parser *PARSER)
     /* Properly deletes a parser by closing the file it referenced and cleaning
      * up its list of tokens waiting to be read. */
 {
-    if (!PARSER) return;
+    assert(PARSER);
     if (PARSER->fd != NULL) fclose(PARSER->fd);
     list_delete(PARSER->tokens);
     free(PARSER->name);
@@ -291,7 +292,8 @@ parser_empty(struct parser *PARSER)
     /* Detects if a parser contains no more tokens. Returns 1 if empty and 0 if
      * not. */
 {
-    if (!PARSER || PARSER->fd == NULL) return 1;
+    assert(PARSER);
+    assert(PARSER->fd);
     if (list_size(PARSER->tokens) == 0
             && (feof(PARSER->fd) || ferror(PARSER->fd))) return 1;
     return 0;
@@ -317,7 +319,8 @@ parser_get(struct parser *PARSER)
     struct token *token = NULL;
     struct token *saved = NULL;
     void *head = NULL;
-    if (!PARSER || parser_empty(PARSER)) return NULL;
+    assert(PARSER);
+    assert(!parser_empty(PARSER));
     /* 0 While we do not have any non-null tokens, */
     while(list_empty(PARSER->tokens) ||
             (list_size(PARSER->tokens) == 1 &&
@@ -401,9 +404,9 @@ parser_cmp(struct parser *PARSER, const char *TOKEN)
      * returned and the stream remains unaltered. */
 {
     struct token *token = NULL;
-    if (!PARSER) return 0;
+    assert(PARSER);
     token = parser_get(PARSER);
-    if (!token) return 0;
+    assert(token);
     /* Check for null tokens and token string equality */
     if ((!TOKEN && !token->null) || (TOKEN && strcmp(TOKEN, token->data))) {
         list_push_front(PARSER->tokens, token);
@@ -421,8 +424,9 @@ parser_cmp_at(struct parser *PARSER, int POS, const char *TOKEN)
     struct item *item;
     struct token *token;
     unsigned int n;
-    if (POS < 0 || !PARSER || list_size(PARSER->tokens) <= POS)
-        return 0;
+    assert(POS >= 0);
+    assert(PARSER);
+    assert(list_size(PARSER->tokens) > POS);
     /* Seek */
     for (item = PARSER->tokens->head, n = 0;
             item != NULL && n < POS;
@@ -440,8 +444,9 @@ parser_cmp_peek(struct parser *PARSER, const char *TOKEN)
      * stream in any case. */
 {
     struct token *token = NULL;
-    if (!PARSER || !TOKEN || !PARSER->tokens || !PARSER->tokens->head)
-        return 0;
+    assert(PARSER);
+    assert(PARSER->tokens);
+    assert(PARSER->tokens->head);
     token = (struct token *)list_head(PARSER->tokens);
     if ((!TOKEN && !token->null) || (TOKEN && strcmp(TOKEN, token->data)))
         return 0;
@@ -453,9 +458,9 @@ parser_ignore(struct parser *PARSER, const char *TOKEN)
     /* Ignores a particular token if it appears next in the token stream */
 {
     struct token *token = NULL;
-    if (!PARSER) return -1;
+    assert(PARSER);
     token = parser_get(PARSER);
-    if (!token) return -1;
+    assert(token);
     /* Check for null tokens and token string equality */
     if ((!TOKEN && !token->null) || strcmp(TOKEN, token->data)) {
         list_push_front(PARSER->tokens, token);
@@ -472,7 +477,7 @@ parser_seek(struct parser *PARSER, const char *TOKEN)
 {
     struct list *list = NULL;
     struct token *token = NULL;
-    if (!PARSER) return NULL;
+    assert(PARSER);
     list = list_create(token_delete);
     do {
         token = parser_get(PARSER);
@@ -497,7 +502,8 @@ parser_seek_list(struct parser *PARSER, struct list *LIST)
 {
     struct list *list = NULL;
     struct token *token = NULL;
-    if (!PARSER || !LIST) return NULL;
+    assert(PARSER);
+    assert(LIST);
     list = list_create(token_delete);
     do {
         void *head = NULL;
@@ -528,7 +534,8 @@ parser_put_back(struct parser *PARSER, struct list *LIST)
      * must be a list of strings. The contents of LIST remain unchanged. */
 {
     void *tail = NULL;
-    if (!PARSER || !LIST) return;
+    assert(PARSER);
+    assert(LIST);
     tail = list_tail(LIST);
     do {
         struct token *item = (struct token *)list_tail(LIST);
