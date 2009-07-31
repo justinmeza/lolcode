@@ -1,0 +1,45 @@
+				    lolcode
+		 An efficient LOLCODE interpreter written in C.
+
+MAINTAINER
+
+    Justin J. Meza < justin.meza@gmail.com >
+
+Y HELO THAR!!!1!
+
+    This version of lolcode supports nearly all of the functionality described
+    in the LOLCODE 1.2 specification.  For more information, see
+    < http://lolcode.com/specs/1.2 >.
+
+    To get started, just run ``make'' in this directory.  This will generate a
+    binary file called ``lolcode''.
+
+    If you just run the binary file (``./lolcode'') you'll notice that it just
+    hangs at the prompt -- that's because it's in interpreter mode, waiting for
+    you to start typing!
+
+    lolcode can interpret files from standard input or from a file.  For
+    example, running ``./lolcode -f file.lol'' will interpret the LOLCODE file
+    ``file.lol''.  You can also pipe output to lolcode, as in ``cat file.lol |
+    ./lolcode'' if this suits your need.
+
+    If you really want to get fancy, you can make a script file that gets
+    interpreted whenever it is run.  The first line of the script should be
+    ``#!/path/to/lolcode'' (of course, replacing ``/path/to'' with the actual
+    path).  After that, code away in LOLCODE.  When you're ready to run the file
+    as a script, be sure to do a ``chmod +x file.lol'' and then you're all set
+    to ``./file.lol'' and it will be interpreted just like any old script.
+
+TODO
+
+    There are still a lot of TODO items, but I've released the source with the
+    intent that others will use the lolcode interpreter as I continue to refine
+    its behavior.
+
+    The following features of the 1.2 specification still need implementation:
+
+      - Unicode support.
+      - Functions.
+
+    If you really miss either of these, feel free to hack away at the source
+    and contribute to the project!
