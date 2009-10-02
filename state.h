@@ -133,7 +133,7 @@ state_restore(struct state *STATE)
     /* Restores a state saved with state_save. */
 {
     assert(STATE);
-    assert(!list_empty(STATE->data));
+    assert(list_size(STATE->data) > 1);
     list_pop_front(STATE->data);
 }
 

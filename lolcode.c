@@ -1045,15 +1045,12 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS)
     /* GTFO */
     if (parser_cmp(PARSER, "GTFO")) {
         list_delete(parser_seek(PARSER, "OIC"));
-        state_restore(VARS);
         return value_create_noob();
     }
 
     /* OIC */
-    if (parser_cmp(PARSER, "OIC")) {
-        /*state_restore(VARS);*/
+    if (parser_cmp(PARSER, "OIC"))
         return value_create_noob();
-    }
 
     /* O RLY? */
     if (parser_cmp(PARSER, "O")) {
