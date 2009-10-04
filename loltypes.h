@@ -200,7 +200,6 @@ value_cast_numbr(struct value *VALUE)
     struct value *value = NULL;
     numbr data;
     assert(VALUE);
-    data = value_get_numbr(VALUE);
     /* NOOB to NUMBR */
     /* TROOF to NUMBR */
     if (VALUE->type == TROOF)
