@@ -484,7 +484,7 @@ parser_seek(struct parser *PARSER, const char *TOKEN)
         if (!token) continue;
         /* TODO: Can both of the list_push_backs be moved here? (Maybe similar
          * for other functions, too?) */
-        if ((!TOKEN && !token->null) || !strcmp(TOKEN, token->data)) {
+        if ((!TOKEN && token->null) || (TOKEN && !strcmp(TOKEN, token->data))) {
             list_push_back(list, token);
             return list;
         }
