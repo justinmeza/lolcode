@@ -24,7 +24,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-unsigned int getline(char **LINEPTR, size_t *N, FILE *STREAM)
+unsigned int get_line(char **LINEPTR, size_t *N, FILE *STREAM)
 {
 	int c;
 	unsigned int i=0;
@@ -63,7 +63,7 @@ unsigned int getline(char **LINEPTR, size_t *N, FILE *STREAM)
 	return i;
 }
 
-unsigned int getline_at(char **LINEPTR, size_t *POS, size_t *N, FILE *STREAM)
+unsigned int get_line_at(char **LINEPTR, size_t *POS, size_t *N, FILE *STREAM)
         /* Grab a line beginning at a particular position in the original
 	 * buffer. */
 {

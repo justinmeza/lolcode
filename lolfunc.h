@@ -35,7 +35,38 @@
 #define __LOLFUNC__
 
 #include <assert.h>
+#include "list.h"
 #include "loltypes.h"
+
+/* lolcode function implementation */
+
+struct func {
+    int size;
+    struct list *args;
+    struct list *body;
+};
+
+    struct func *
+func_create(int SIZE, struct list *ARGS, struct list *BODY)
+{
+    struct func *func = malloc(sizeof(struct func));
+    assert(SIZE >= 0);
+    assert(ARGS);
+    assert(BODY);
+    func->size = SIZE;
+    func->args = ARGS;
+    func->body = BODY;
+    return func;
+}
+
+    void
+func_delete(struct func *FUNC)
+{
+    assert(FUNC);
+    list_delete(FUNC->args);
+    list_delete(FUNC->body);
+    free(FUNC);
+}
 
 /* LOLCODE standard functions */
 

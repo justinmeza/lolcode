@@ -331,7 +331,7 @@ parser_get(struct parser *PARSER)
     /* 0.1 Make sure our file is in an acceptable state */
         if (feof(PARSER->fd)) return NULL;
     /* 0.2 Get lines until we fill our buffer */
-        do r = getline_at(&buf, &p, &len, PARSER->fd);
+        do r = get_line_at(&buf, &p, &len, PARSER->fd);
         while(r >= 0 && p < PARSER->buffer);
         len = strlen(buf);
     /* 0.2.1 If we were able to retrieve data, */
