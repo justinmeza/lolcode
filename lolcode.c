@@ -1236,6 +1236,21 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
             list_push_back(ops, token_create("YA", strlen("YA"), line, column, 0));
             list_push_back(ops, token_create("RLY", strlen("RLY"), line, column, 0));
             list_push_back(ops, token_create_null(0));
+            /* Seek to the end of the loop */
+            list = parser_seek(PARSER, (const char *)name->data);
+            /* Remove loop closing to make room for update */
+            list_pop_back(list);
+            list_pop_back(list);
+            list_pop_back(list);
+            list_pop_back(list);
+            /* Transfer over rest of list */
+            head = list_head(list);
+            do {
+                struct token *item = (struct token *)list_head(list);
+                list_push_back(ops, item);
+                list_shift_down(list);
+            }
+            while (list_head(list) != head);
             /* TODO: Is there a more robust way of doing this whole process?
              * If the condition succeeds, update the variable */
             list_push_back(ops, token_create(var->data, strlen(var->data), line, column, 0));
@@ -1257,15 +1272,11 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
             list_push_back(ops, token_create("AN", strlen("AN"), line, column, 0));
             list_push_back(ops, token_create("1", strlen("1"), line, column, 0));
             list_push_back(ops, token_create_null(0));
-            /* Seek to the end of the loop */
-            list = parser_seek(PARSER, (const char *)name->data);
-            head = list_head(list);
-            do {
-                struct token *item = (struct token *)list_head(list);
-                list_push_back(ops, item);
-                list_shift_down(list);
-            }
-            while (list_head(list) != head);
+            /* Add closing to loop */
+            list_push_back(ops, token_create("IM", strlen("IM"), line, column, 0));
+            list_push_back(ops, token_create("OUTTA", strlen("OUTTA"), line, column, 0));
+            list_push_back(ops, token_create("YR", strlen("YR"), line, column, 0));
+            list_push_back(ops, token_create(name->data, strlen(name->data), line, column, 0));
             /* Add closing to conditional */
             list_push_back(ops, token_create_null(0));
             list_push_back(ops, token_create("OIC", strlen("OIC"), line, column, 0));
