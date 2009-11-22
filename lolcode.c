@@ -1304,6 +1304,10 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
 
     /* HOW DUZ I */
     if (parser_cmp(PARSER, "HOW")) {
+        struct token *name = NULL;
+        struct item *head = NULL;
+        struct list *args = NULL;
+        struct list *body = NULL;
         if (!parser_cmp(PARSER, "DUZ")) {
             error(PARSER, "Expected `DUZ' after `HOW'");
             return NULL;
@@ -1312,10 +1316,7 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
             error(PARSER, "Expected `I' after `DUZ'");
             return NULL;
         }
-        struct token *name = NULL;
-        struct item *head = NULL;
-        struct list *args = list_create(token_delete);
-        struct list *body = NULL;
+        args = list_create(token_delete);
         name = parser_get(PARSER);
         while (parser_cmp(PARSER, "YR")) {
             struct token *arg = NULL;
@@ -1324,6 +1325,7 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
             /* TODO: check for reserved keywords */
             if (!(arg = parser_get(PARSER))) {
                 error(PARSER, "Argument name expected");
+                list_delete(args);
                 return NULL;
             }
             /* Check for duplicate argument names */
@@ -1345,6 +1347,7 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
             if (!parser_cmp(PARSER, "AN")) break;
             else if (!parser_cmp_peek(PARSER, "YR")) {
                 error(PARSER, "Expected `YR' after `AN'");
+                list_delete(args);
                 return NULL;
             }
         }
@@ -1354,14 +1357,17 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
         list_pop_back(body);
         if (!parser_cmp(PARSER, "U")) {
             error(PARSER, "Expected `U' after `IF'");
+            list_delete(args);
             return NULL;
         }
         if (!parser_cmp(PARSER, "SAY")) {
             error(PARSER, "Expected `SAY' after `IF U'");
+            list_delete(args);
             return NULL;
         }
         if (!parser_cmp(PARSER, "SO")) {
             error(PARSER, "Expected `SO' after `IF U SAY'");
+            list_delete(args);
             return NULL;
         }
         hash_insert(FUNCS, name->data, func_create(list_size(args), args, body));
