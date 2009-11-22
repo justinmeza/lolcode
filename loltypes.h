@@ -74,6 +74,7 @@ value_get_troof(struct value *VALUE)
 {
     assert(VALUE);
     assert(VALUE->type == TROOF);
+    assert(VALUE->data);
     return *((troof *)(VALUE->data));
 }
 
@@ -82,6 +83,7 @@ value_get_numbr(struct value *VALUE)
 {
     assert(VALUE);
     assert(VALUE->type == NUMBR);
+    assert(VALUE->data);
     return *((numbr *)(VALUE->data));
 }
 
@@ -90,6 +92,7 @@ value_get_numbar(struct value *VALUE)
 {
     assert(VALUE);
     assert(VALUE->type == NUMBAR);
+    assert(VALUE->data);
     return *((numbar *)(VALUE->data));
 }
 
@@ -98,6 +101,7 @@ value_get_yarn(struct value *VALUE)
 {
     assert(VALUE);
     assert(VALUE->type == YARN);
+    assert(VALUE->data);
     return ((yarn)(VALUE->data));
 }
 
@@ -404,7 +408,6 @@ value_copy(struct value *VALUE)
     /* Returns a copy of the contents of VALUE */
 {
     assert(VALUE);
-    assert(VALUE->data);
     switch (VALUE->type) {
         case NOOB:
             return value_create_noob();

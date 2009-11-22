@@ -41,19 +41,19 @@
 /* lolcode function implementation */
 
 struct func {
-    int size;
+    int arity;
     struct list *args;
     struct list *body;
 };
 
     struct func *
-func_create(int SIZE, struct list *ARGS, struct list *BODY)
+func_create(int ARITY, struct list *ARGS, struct list *BODY)
 {
     struct func *func = malloc(sizeof(struct func));
-    assert(SIZE >= 0);
+    assert(ARITY >= 0);
     assert(ARGS);
     assert(BODY);
-    func->size = SIZE;
+    func->arity = ARITY;
     func->args = ARGS;
     func->body = BODY;
     return func;

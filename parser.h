@@ -293,9 +293,8 @@ parser_empty(struct parser *PARSER)
      * not. */
 {
     assert(PARSER);
-    assert(PARSER->fd);
-    if (list_size(PARSER->tokens) == 0
-            && (feof(PARSER->fd) || ferror(PARSER->fd))) return 1;
+    if ((list_size(PARSER->tokens) == 0)
+        && (!PARSER->fd || (feof(PARSER->fd) || ferror(PARSER->fd)))) return 1;
     return 0;
 }
 
@@ -324,12 +323,12 @@ parser_get(struct parser *PARSER)
     /* 0 While we do not have any non-null tokens, */
     while(list_empty(PARSER->tokens) ||
             (list_size(PARSER->tokens) == 1 &&
-            ((struct token *)list_tail(PARSER->tokens))->null))  {
+            ((struct token *)list_tail(PARSER->tokens))->null)) {
         char *buf = NULL;
         size_t len = 0, p = 0;
         unsigned int start = 0, pos, ignore = 0, keep = 0, size, r;
     /* 0.1 Make sure our file is in an acceptable state */
-        if (feof(PARSER->fd)) return NULL;
+        if (!PARSER->fd || feof(PARSER->fd)) break;
     /* 0.2 Get lines until we fill our buffer */
         do r = get_line_at(&buf, &p, &len, PARSER->fd);
         while(r >= 0 && p < PARSER->buffer);
@@ -426,7 +425,7 @@ parser_cmp_at(struct parser *PARSER, int POS, const char *TOKEN)
     unsigned int n;
     assert(POS >= 0);
     assert(PARSER);
-    assert(list_size(PARSER->tokens) > POS);
+    if (list_size(PARSER->tokens) <= POS) return 0;
     /* Seek */
     for (item = PARSER->tokens->head, n = 0;
             item != NULL && n < POS;
@@ -526,6 +525,13 @@ parser_seek_list(struct parser *PARSER, struct list *LIST)
     while (!parser_empty(PARSER));
     list_delete(LIST);
     return list;
+}
+
+    void
+parser_seek_end(struct parser *PARSER)
+{
+    assert(PARSER);
+    while (!parser_empty(PARSER)) token_delete(parser_get(PARSER));
 }
 
     void

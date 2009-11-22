@@ -36,6 +36,8 @@
  *
  * TODO
  *
+ *    - GTFO should break loops
+ *    - Make sure variables, loops, and functions do not share share names
  *    - Add scoping to other control structures
  *    - For the love of god please make everything 80 columns wide at most!
  *    - For BIGGR OF and SMALLR OF, what should the return type be? The
@@ -395,20 +397,6 @@ evaluate_parser(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
     assert(LOOPS);
     assert(FUNCS);
 
-    /* HAI <VERSION> */
-    if (!parser_cmp(PARSER, "HAI")) {
-        error(PARSER, "Expected HAI token");
-        return 1;
-    }
-    if (!parser_cmp(PARSER, "1.2")) {
-        error(PARSER, "Expected version 1.2");
-        return 1;
-    }
-    if (!parser_cmp(PARSER, NULL)) {
-        error(PARSER, "Unexpected");
-        return 1;
-    }
-
     while (!parser_empty(PARSER)) {
         struct value *value = NULL;
         /* OBTW ... TLDR */
@@ -416,11 +404,15 @@ evaluate_parser(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
                 list_delete(parser_seek(PARSER, "TLDR"));
         else {
             /* KTHXBYE */
-            if (parser_cmp_peek(PARSER, "KTHXBYE")) return 0;
+            if (parser_cmp(PARSER, "KTHXBYE")) return 0;
             /* Evaluate parser expressions */
             else if (!(value = evaluate_expr(PARSER, VARS, LOOPS, FUNCS)))
                 return 1;
         }
+        /* Update IT */
+        if (value) state_write(VARS, "IT", value);
+        /* If the parser is empty, return */
+        if (parser_empty(PARSER)) return 0;
         /* We should be left with a null token */
         if (!parser_cmp(PARSER, NULL)) {
             error(PARSER, "Unexpected token");
@@ -429,8 +421,6 @@ evaluate_parser(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
             if (value) value_delete(value);
             return 1;
         }
-        /* Update IT */
-        if (value) state_write(VARS, "IT", value);
     }
     return 0;
 }
@@ -1168,7 +1158,7 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
         }
     }
 
-    /* IM IN UR */
+    /* IM IN YR */
     if (parser_cmp(PARSER, "IM")) {
         if (parser_cmp(PARSER, "IN")) {
             int line;
@@ -1193,7 +1183,7 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
             }
             var = parser_get(PARSER);
             if (!state_read(VARS, var->data)) {
-                error(PARSER, "Invalid loop update target");
+                error(PARSER, "Variable not found");
                 token_delete(name);
                 token_delete(token);
                 token_delete(var);
@@ -1303,51 +1293,83 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
 
     /* HOW DUZ I */
     if (parser_cmp(PARSER, "HOW")) {
-        if (parser_cmp(PARSER, "DUZ")) {
-            struct token *name = NULL;
-            struct item *head = NULL;
-            struct list *args = list_create(token_delete);
-            struct list *body = NULL;
-            if (!parser_cmp(PARSER, "I")) {
-                error(PARSER, "Expected `I' after `DUZ'");
+        if (!parser_cmp(PARSER, "DUZ")) {
+            error(PARSER, "Expected `DUZ' after `HOW'");
+            return NULL;
+        }
+        if (!parser_cmp(PARSER, "I")) {
+            error(PARSER, "Expected `I' after `DUZ'");
+            return NULL;
+        }
+        struct token *name = NULL;
+        struct item *head = NULL;
+        struct list *args = list_create(token_delete);
+        struct list *body = NULL;
+        name = parser_get(PARSER);
+        while (parser_cmp(PARSER, "YR")) {
+            struct token *arg = NULL;
+            void *head = NULL;
+            /* Make sure next token is non-NULL and unique */
+            /* TODO: check for reserved keywords */
+            if (!(arg = parser_get(PARSER))) {
+                error(PARSER, "Argument name expected");
                 return NULL;
             }
-            name = parser_get(PARSER);
-            while (parser_cmp(PARSER, "YR")) {
-                struct token *arg = NULL;
-                void *head = NULL;
-                /* Make sure next token is non-NULL and unique */
-                /* TODO: check for reserved keyword */
-                if (!(arg = parser_get(PARSER))) {
-                    error(PARSER, "Argument name expected");
-                    return NULL;
-                }
-                if (list_size(args) > 0) {
-                    head = list_head(args);
-                    do {
-                        struct token *token = (struct token *)list_head(args);
-                        if (!strcmp(token->data, arg->data)) {
-                            error(PARSER, "Duplicate argument name");
-                            token_delete(arg);
-                            list_delete(args);
-                            return NULL;
-                        }
-                        list_shift_down(args);
+            /* Check for duplicate argument names */
+            if (list_size(args) > 0) {
+                head = list_head(args);
+                do {
+                    struct token *token = (struct token *)list_head(args);
+                    if (!strcmp(token->data, arg->data)) {
+                        error(PARSER, "Duplicate argument name");
+                        token_delete(arg);
+                        list_delete(args);
+                        return NULL;
                     }
-                    while (list_head(args) != head);
+                    list_shift_down(args);
                 }
-                list_push_back(args, arg);
+                while (list_head(args) != head);
             }
-            /* Save function body in FUNCS hash */
-            body = parser_seek(PARSER, "IF");
-                    head = list_head(body);
-                    do {
-                        struct token *token = (struct token *)list_head(body);
-printf("%s\n", token->data);
-                        list_shift_down(body);
-                    }
-                    while (list_head(body) != head);
+            list_push_back(args, arg);
+            if (!parser_cmp(PARSER, "AN")) break;
+            else if (!parser_cmp_peek(PARSER, "YR")) {
+                error(PARSER, "Expected `YR' after `AN'");
+                return NULL;
+            }
         }
+        /* Save function body in FUNCS hash */
+        body = parser_seek(PARSER, "IF");
+        list_pop_front(body);
+        list_pop_back(body);
+        if (!parser_cmp(PARSER, "U")) {
+            error(PARSER, "Expected `U' after `IF'");
+            return NULL;
+        }
+        if (!parser_cmp(PARSER, "SAY")) {
+            error(PARSER, "Expected `SAY' after `IF U'");
+            return NULL;
+        }
+        if (!parser_cmp(PARSER, "SO")) {
+            error(PARSER, "Expected `SO' after `IF U SAY'");
+            return NULL;
+        }
+        hash_insert(FUNCS, name->data, func_create(list_size(args), args, body));
+        return value_create_noob();
+    }
+
+    /* FOUND YR */
+    if (parser_cmp(PARSER, "FOUND")) {
+        struct value *expr = NULL;
+        if (!parser_cmp(PARSER, "YR")) {
+            error(PARSER, "Expected `YR' after `FOUND'");
+            return NULL;
+        }
+        if (!(expr = evaluate_expr(PARSER, VARS, LOOPS, FUNCS))) {
+            error(PARSER, "Expected expression after `FOUND YR'");
+            return NULL;
+        }
+        parser_seek_end(PARSER);
+        return expr;
     }
 
     /* We must be left with value */
@@ -1370,6 +1392,50 @@ printf("%s\n", token->data);
             || (value = token_to_numbar(token))
             || (value = token_to_troof(token)))
         return value;
+
+    /* FUNCTION */
+    if (value = hash_find(FUNCS, token->data)) {
+        struct parser *parser = NULL;
+        struct state *vars = state_create(data_delete_value, 1);
+        struct hash *loops = hash_create(data_delete_list, 1);
+        /*struct hash *funcs = hash_create(data_delete_func, 1);*/
+        struct func *func = (struct func *)value;
+        struct value *ret = NULL;
+        void * head = NULL;
+        int status = 0;
+        /* Retrieve all arguments */
+        struct list *args = args_get(PARSER, VARS, LOOPS, FUNCS, -1);
+        /* Check for proper number of arguments */
+        if (list_size(args) != func->arity) {
+            error(PARSER, "Invalid number of arguments");
+            list_delete(args);
+            return NULL;
+        }
+        /* Populate variables with arguments */
+        head = list_head(func->args);
+        do {
+            struct token *arg = (struct token *)list_head(func->args);
+            state_write(vars, arg->data, (struct value *)list_head(args));
+            list_shift_down(args);
+            list_shift_down(func->args);
+        }
+        while (list_head(func->args) != head);
+        /* TODO: should we allow shadowing of arguments? For now, yes. */
+        state_save(vars);
+        /* Initialize the default IT variable */
+        state_write(vars, "IT", value_create_noob());
+
+        parser = parser_create(NULL, token->data, NULL, NULL, 0, NULL);
+        parser_put_back(parser, func->body);
+        /* Note that we inherit FUNCS */
+        status = evaluate_parser(parser, vars, loops, FUNCS);
+        ret = value_copy(state_read(vars, "IT"));
+
+        /*hash_delete(funcs);*/
+        hash_delete(loops);
+        state_delete(vars);
+        return (status ? NULL : ret);
+    }
 
     /* UNABLE TO EVALUATE */
     list_push_front(PARSER->tokens, token);
@@ -1422,6 +1488,21 @@ main(int ARGC, char **ARGV)
 
     /* Initialize the default IT variable */
     state_write(vars, "IT", value_create_noob());
+
+    /* HAI <VERSION> */
+    if (!parser_cmp(parser, "HAI")) {
+        error(parser, "Expected HAI token");
+        goto DONE;
+    }
+    if (!parser_cmp(parser, "1.2")) {
+        error(parser, "Expected version 1.2");
+        goto DONE;
+    }
+    if (!parser_cmp(parser, NULL)) {
+        error(parser, "Unexpected");
+        goto DONE;
+    }
+
     status = evaluate_parser(parser, vars, loops, funcs);
 
 DONE:
