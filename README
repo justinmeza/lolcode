@@ -39,7 +39,6 @@ TODO
     The following features of the 1.2 specification still need implementation:
 
       - Unicode support.
-      - Functions.
 
     If you really miss either of these, feel free to hack away at the source
     and contribute to the project!
