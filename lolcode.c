@@ -76,6 +76,13 @@ data_delete_list(void *DATA)
 }
 
     void
+data_delete_loop(void *DATA)
+    /* Deletes pointers to loops */
+{
+    loop_delete(DATA);
+}
+
+    void
 data_delete_func(void *DATA)
     /* Deletes pointers to funcs */
 {
@@ -1056,8 +1063,7 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
     }
 
     /* OIC */
-    if (parser_cmp(PARSER, "OIC"))
-        return value_create_noob();
+    if (parser_cmp(PARSER, "OIC")) return value_create_noob();
 
     /* O RLY? */
     if (parser_cmp(PARSER, "O")) {
@@ -1161,144 +1167,113 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
     /* IM IN YR */
     if (parser_cmp(PARSER, "IM")) {
         if (parser_cmp(PARSER, "IN")) {
-            int line;
-            int column;
             struct token *name = NULL;
-            struct token *token = NULL;
+            struct token *op = NULL;
             struct token *var = NULL;
-            struct list *ops = NULL;
-            struct list *list = NULL;
-            void *head = NULL;
+            struct list *update = NULL;
+            struct list *body = NULL;
+            struct list *guard = NULL;
             if (!parser_cmp(PARSER, "YR")) {
-                error(PARSER, "Expected `YR' after `IN'");
+                error(PARSER, "Expected `YR' after `IM IN'");
                 return NULL;
             }
             name = parser_get(PARSER);
-            token = parser_get(PARSER);
+            op = parser_get(PARSER);
             if (!parser_cmp(PARSER, "YR")) {
-                error(PARSER, "Expected `YR' after operation in loop");
+                error(PARSER, "Expected `YR' after loop operation");
                 token_delete(name);
-                token_delete(token);
+                token_delete(op);
                 return NULL;
             }
             var = parser_get(PARSER);
             if (!state_read(VARS, var->data)) {
-                error(PARSER, "Variable not found");
+                error(PARSER, "Loop variable not found");
                 token_delete(name);
-                token_delete(token);
+                token_delete(op);
                 token_delete(var);
                 return NULL;
             }
-            line = name->line;
-            column = name->column;
-            ops = list_create(token_delete);
-            /* If a stopping condition is present, read and format the
-             * conditional expression. */
-            list_push_back(ops, token_create_null(0));
-            if (parser_cmp(PARSER, "TIL")) {
-                list = parser_seek(PARSER, NULL);
-                list_push_back(ops, token_create("NOT", strlen("NOT"), line, column, 0));
-                head = list_head(list);
-                do {
-                    struct token *item = (struct token *)list_head(list);
-                    list_push_back(ops, item);
-                    list_shift_down(list);
-                }
-                while (list_head(list) != head);
+            /* Generate update */
+            update = list_create(token_delete);
+            list_push_back(update, token_create_str(var->data));
+            list_push_back(update, token_create_str("R"));
+            if (!strcmp(op->data, "UPPIN"))
+                list_push_back(update, token_create_str("SUM"));
+            else if (!strcmp(op->data, "NERFIN"))
+                list_push_back(update, token_create_str("DIFF"));
+            else {
+                error(PARSER, "Expected `UPPIN' or `NERFIN'");
+                token_delete(name);
+                token_delete(op);
+                token_delete(var);
+                list_delete(update);
+                return NULL;
             }
-            else if (parser_cmp(PARSER, "WILE")) {
-                list = parser_seek(PARSER, NULL);
-                head = list_head(list);
-                do {
-                    struct token *item = (struct token *)list_head(list);
-                    list_push_back(ops, item);
-                    list_shift_down(list);
-                }
-                while (list_head(list) != head);
-            }
+            list_push_back(update, token_create_str("OF"));
+            list_push_back(update, token_create_str(var->data));
+            list_push_back(update, token_create_str("AN"));
+            list_push_back(update, token_create_str("1"));
+            list_push_back(update, token_create_null(0));
+            /* Generate guard */
+            if (parser_cmp(PARSER, "TIL"))
+                guard = (struct list *)list_push_front(parser_seek(PARSER, NULL),
+                        token_create_str("NOT"));
+            else if (parser_cmp(PARSER, "WILE"))
+                guard = parser_seek(PARSER, NULL);
             else if (parser_cmp_peek(PARSER, NULL)) {
-                list_push_back(ops, token_create("WIN", strlen("WIN"), line, column, 0));
-                list_push_back(ops, token_create_null(0));
+                guard = list_create(token_delete);
+                list_push_back(guard, token_create_str("WIN"));
+                list_push_back(guard, token_create_null(0));
             }
             else {
                 error(PARSER, "Invalid loop condition; expected `TIL' or `WILE'");
                 token_delete(name);
-                token_delete(token);
+                token_delete(op);
                 token_delete(var);
-                list_delete(ops);
+                list_delete(guard);
                 return NULL;
             }
-            /* Consume the trailing null token */
-            parser_cmp(PARSER, NULL);
-            list_push_back(ops, token_create("O", strlen("O"), line, column, 0));
-            list_push_back(ops, token_create("RLY?", strlen("RLY?"), line, column, 0));
-            list_push_back(ops, token_create_null(0));
-            list_push_back(ops, token_create("YA", strlen("YA"), line, column, 0));
-            list_push_back(ops, token_create("RLY", strlen("RLY"), line, column, 0));
-            list_push_back(ops, token_create_null(0));
-            /* Seek to the end of the loop */
-            list = parser_seek(PARSER, (const char *)name->data);
-            /* Remove loop closing to make room for update */
-            list_pop_back(list);
-            list_pop_back(list);
-            list_pop_back(list);
-            list_pop_back(list);
-            /* Transfer over rest of list */
-            head = list_head(list);
-            do {
-                struct token *item = (struct token *)list_head(list);
-                list_push_back(ops, item);
-                list_shift_down(list);
-            }
-            while (list_head(list) != head);
-            /* TODO: Is there a more robust way of doing this whole process?
-             * If the condition succeeds, update the variable */
-            list_push_back(ops, token_create(var->data, strlen(var->data), line, column, 0));
-            list_push_back(ops, token_create("R", strlen("R"), line, column, 0));
-            if (!strcmp("UPPIN", token->data))
-                list_push_back(ops, token_create("SUM", strlen("SUM"), line, column, 0));
-            else if (!strcmp("NERFIN", token->data))
-                list_push_back(ops, token_create("DIFF", strlen("DIFF"), line, column, 0));
-            else {
-                error(PARSER, "Invalid loop operation; expected `UPPIN' or `NERFIN'");
-                token_delete(name);
-                token_delete(token);
-                token_delete(var);
-                list_delete(ops);
-                return NULL;
-            }
-            list_push_back(ops, token_create("OF", strlen("OF"), line, column, 0));
-            list_push_back(ops, token_create(var->data, strlen(var->data), line, column, 0));
-            list_push_back(ops, token_create("AN", strlen("AN"), line, column, 0));
-            list_push_back(ops, token_create("1", strlen("1"), line, column, 0));
-            list_push_back(ops, token_create_null(0));
-            /* Add closing to loop */
-            list_push_back(ops, token_create("IM", strlen("IM"), line, column, 0));
-            list_push_back(ops, token_create("OUTTA", strlen("OUTTA"), line, column, 0));
-            list_push_back(ops, token_create("YR", strlen("YR"), line, column, 0));
-            list_push_back(ops, token_create(name->data, strlen(name->data), line, column, 0));
-            /* Add closing to conditional */
-            list_push_back(ops, token_create_null(0));
-            list_push_back(ops, token_create("OIC", strlen("OIC"), line, column, 0));
-            /* Store the loop operations */
-            hash_insert(LOOPS, name->data, ops);
-            /* Start out the loop */
-            parser_put_back(PARSER, ops);
+            /* Read in body */
+            body = parser_seek(PARSER, (const char *)name->data);
+            /* Update loops hash */
+            hash_insert(LOOPS, name->data, loop_create(update, guard, body));
+            /* Start first iteration */
+            parser_put_back(PARSER, body);
+            token_delete(name);
+            token_delete(op);
+            token_delete(var);
             return value_create_noob();
         }
-        else if (parser_cmp(PARSER, "OUTTA")) {
+        if (parser_cmp(PARSER, "OUTTA")) {
             struct token *name = NULL;
+            struct loop *loop = NULL;
+            struct value *guard = NULL;
+            struct parser *parser = NULL;
             if (!parser_cmp(PARSER, "YR")) {
-                error(PARSER, "Expected `YR' after `OUTTA'");
+                error(PARSER, "Expected `YR' after `IM OUTTA'");
                 return NULL;
             }
             name = parser_get(PARSER);
-            parser_put_back(PARSER, hash_find(LOOPS, name->data));
+            loop = hash_find(LOOPS, name->data);
+            /* Perform guard check */
+            parser = parser_create_virtual(name->data);
+            parser_put_back(parser, loop->guard);
+            guard = evaluate_expr(parser, VARS, LOOPS, FUNCS);
+            if (guard->type != TROOF) {
+                error(PARSER, "Expected guard to return TROOF");
+                return NULL;
+            }
+            if (value_get_troof(guard) == WIN) {
+                /* Update loop variable */
+                parser_put_back(parser, loop->update);
+                evaluate_parser(parser, VARS, LOOPS, FUNCS);
+                /* Execute loop body */
+                parser_put_back(PARSER, loop->body);
+            }
+            token_delete(name);
+            value_delete(guard);
+            parser_delete(parser);
             return value_create_noob();
-        }
-        else {
-            error(PARSER, "Expected token after `IM'");
-            return NULL;
         }
     }
 
@@ -1500,7 +1475,7 @@ main(int ARGC, char **ARGV)
     }
 
     vars = state_create(data_delete_value, 1);
-    loops = hash_create(data_delete_list, 1);
+    loops = hash_create(data_delete_loop, 1);
     funcs = hash_create(data_delete_func, 1);
 
     /* Initialize the default IT variable */
