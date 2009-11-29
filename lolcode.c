@@ -75,13 +75,6 @@ data_delete_list(void *DATA)
 }
 
     void
-data_delete_loop(void *DATA)
-    /* Deletes pointers to loops */
-{
-    loop_delete(DATA);
-}
-
-    void
 data_delete_func(void *DATA)
     /* Deletes pointers to funcs */
 {
@@ -302,11 +295,11 @@ token_to_yarn(struct parser *PARSER, struct state *VARS, struct token *TOKEN)
 }
 
 struct value *evaluate_expr(struct parser *, struct state *, struct hash *,
-        struct hash *, struct list *);
+        struct list *);
 
     struct list *
-args_get(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
-        struct hash *FUNCS, struct list *BREAKS, int NUM)
+args_get(struct parser *PARSER, struct state *VARS, struct hash *FUNCS,
+        struct list *BREAKS, int NUM)
     /* Removes NUM arguments from parsers token stream, optionally seperated by
      * ANs. NUM < 0 retrieves as many arguments as possible.  Caller code
      * should check to make sure the number of arguments actually returned
@@ -316,9 +309,9 @@ args_get(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
     struct value *arg = NULL;
     int start = NUM;
     while (NUM--) {
-        if ((arg = evaluate_expr(PARSER, VARS, LOOPS, FUNCS, BREAKS)) == NULL) break;
+        if ((arg = evaluate_expr(PARSER, VARS, FUNCS, BREAKS)) == NULL) break;
         list_push_back(args, arg);
-        if (NUM) parser_ignore(PARSER, "AN");
+        if (NUM) parser_cmp(PARSER, "AN");
     }
     return args;
 }
@@ -391,8 +384,8 @@ args_convert(struct list *LIST, int *TYPES, unsigned int SIZE)
 }
 
     int
-evaluate_parser(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
-        struct hash *FUNCS, struct list *BREAKS)
+evaluate_parser(struct parser *PARSER, struct state *VARS, struct hash *FUNCS,
+        struct list *BREAKS)
     /* Evaluates all of the remaining tokens in PARSER and returns the result
      * of the last evaluated expression. The arguments which are used for the
      * state of the program are not modified but are visible to the evaluated
@@ -400,7 +393,6 @@ evaluate_parser(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
 {
     assert(PARSER);
     assert(VARS);
-    assert(LOOPS);
     assert(FUNCS);
 
     while (!parser_empty(PARSER)) {
@@ -412,7 +404,7 @@ evaluate_parser(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
             /* KTHXBYE */
             if (parser_cmp(PARSER, "KTHXBYE")) return 0;
             /* Evaluate parser expressions */
-            else if (!(value = evaluate_expr(PARSER, VARS, LOOPS, FUNCS, BREAKS)))
+            else if (!(value = evaluate_expr(PARSER, VARS, FUNCS, BREAKS)))
                 return 1;
         }
         /* Update IT */
@@ -432,21 +424,20 @@ evaluate_parser(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
 }
 
     struct value *
-evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
-        struct hash *FUNCS, struct list *BREAKS)
+evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *FUNCS,
+        struct list *BREAKS)
     /* Evaluates the next valid expression present in PARSER's token stream */
 {
     struct token *token;
     struct value *value;
     assert(PARSER);
     assert(VARS);
-    assert(LOOPS);
     assert(FUNCS);
 
     /* VISIBLE */
     if (parser_cmp(PARSER, "VISIBLE")) {
         /* Retrieve all arguments */
-        struct list *args = args_get(PARSER, VARS, LOOPS, FUNCS, BREAKS, -1);
+        struct list *args = args_get(PARSER, VARS, FUNCS, BREAKS, -1);
         /* Check for at least one argument */
         if (list_size(args) == 0) {
             error(PARSER, "No arguments supplied to VISIBLE");
@@ -487,7 +478,7 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
             return NULL;
         }
         /* Retrieve all arguments */
-        args = args_get(PARSER, VARS, LOOPS, FUNCS, BREAKS, 2);
+        args = args_get(PARSER, VARS, FUNCS, BREAKS, 2);
         /* Check for correct number of arguments */
         if (list_size(args) != 2) {
             error(PARSER, "Wrong number of arguments to SUM OF");
@@ -514,7 +505,7 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
             error(PARSER, "Expected `OF' after `DIFF'");
             return NULL;
         }
-        args = args_get(PARSER, VARS, LOOPS, FUNCS, BREAKS, 2);
+        args = args_get(PARSER, VARS, FUNCS, BREAKS, 2);
         if (list_size(args) != 2) {
             error(PARSER, "Wrong number of arguments to DIFF OF");
             list_delete(args);
@@ -538,7 +529,7 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
             error(PARSER, "Expected `OF' after `PRODUKT'");
             return NULL;
         }
-        args = args_get(PARSER, VARS, LOOPS, FUNCS, BREAKS, 2);
+        args = args_get(PARSER, VARS, FUNCS, BREAKS, 2);
         if (list_size(args) != 2) {
             error(PARSER, "Wrong number of arguments to PRODUKT OF");
             list_delete(args);
@@ -562,7 +553,7 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
             error(PARSER, "Expected `OF' after `QHUSHUNT'");
             return NULL;
         }
-        args = args_get(PARSER, VARS, LOOPS, FUNCS, BREAKS, 2);
+        args = args_get(PARSER, VARS, FUNCS, BREAKS, 2);
         if (list_size(args) != 2) {
             error(PARSER, "Wrong number of arguments to QUOSHUNT OF");
             list_delete(args);
@@ -586,7 +577,7 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
             error(PARSER, "Expected `OF' after `MOD'");
             return NULL;
         }
-        args = args_get(PARSER, VARS, LOOPS, FUNCS, BREAKS, 2);
+        args = args_get(PARSER, VARS, FUNCS, BREAKS, 2);
         if (list_size(args) != 2) {
             error(PARSER, "Wrong number of arguments to MOD OF");
             list_delete(args);
@@ -610,7 +601,7 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
             error(PARSER, "Expected `OF' after `BIGGR'");
             return NULL;
         }
-        args = args_get(PARSER, VARS, LOOPS, FUNCS, BREAKS, 2);
+        args = args_get(PARSER, VARS, FUNCS, BREAKS, 2);
         if (list_size(args) != 2) {
             error(PARSER, "Wrong number of arguments to BIGGR OF");
             list_delete(args);
@@ -634,7 +625,7 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
             error(PARSER, "Expected `OF' after `BIGGR'");
             return NULL;
         }
-        args = args_get(PARSER, VARS, LOOPS, FUNCS, BREAKS, 2);
+        args = args_get(PARSER, VARS, FUNCS, BREAKS, 2);
         if (list_size(args) != 2) {
             error(PARSER, "Wrong number of arguments to SMALLR OF");
             list_delete(args);
@@ -652,7 +643,7 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
     /* BOTH OF, BOTH SAEM */
     if (parser_cmp(PARSER, "BOTH")) {
         if (parser_cmp(PARSER, "OF")) {
-            struct list *args = args_get(PARSER, VARS, LOOPS, FUNCS, BREAKS, 2);
+            struct list *args = args_get(PARSER, VARS, FUNCS, BREAKS, 2);
             struct list *values = NULL;
             int types[1] = { TROOF };
             if (list_size(args) != 2) {
@@ -669,7 +660,7 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
             return func_foldl(values, func_bothof);
         }
         else if (parser_cmp(PARSER, "SAEM")) {
-            struct list *args = args_get(PARSER, VARS, LOOPS, FUNCS, BREAKS, 2);
+            struct list *args = args_get(PARSER, VARS, FUNCS, BREAKS, 2);
             struct list *values = NULL;
             int types[2] = { NUMBR, NUMBAR };
             if (list_size(args) != 2) {
@@ -700,7 +691,7 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
             error(PARSER, "Expected `OF' after `EITHER'");
             return NULL;
         }
-        args = args_get(PARSER, VARS, LOOPS, FUNCS, BREAKS, 2);
+        args = args_get(PARSER, VARS, FUNCS, BREAKS, 2);
         if (list_size(args) != 2) {
             error(PARSER, "Wrong number of arguments to EITHER OF");
             list_delete(args);
@@ -724,7 +715,7 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
             error(PARSER, "Expected `OF' after `WON'");
             return NULL;
         }
-        args = args_get(PARSER, VARS, LOOPS, FUNCS, BREAKS, 2);
+        args = args_get(PARSER, VARS, FUNCS, BREAKS, 2);
         if (list_size(args) != 2) {
             error(PARSER, "Wrong number of arguments to WON OF");
             list_delete(args);
@@ -742,7 +733,7 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
     /* NOT */
     if (parser_cmp(PARSER, "NOT")) {
         /* Retrieve one argument */
-        struct list *args = args_get(PARSER, VARS, LOOPS, FUNCS, BREAKS, 1);
+        struct list *args = args_get(PARSER, VARS, FUNCS, BREAKS, 1);
         struct value *value = NULL;
         struct value *result = NULL;
         /* Check for correct number of arguments */
@@ -775,7 +766,7 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
             error(PARSER, "Expected `OF' after `ALL'");
             return NULL;
         }
-        args = args_get(PARSER, VARS, LOOPS, FUNCS, BREAKS, -1);
+        args = args_get(PARSER, VARS, FUNCS, BREAKS, -1);
         if (list_size(args) == 0) {
             error(PARSER, "No arguments supplied to ALL OF");
             list_delete(args);
@@ -803,7 +794,7 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
             error(PARSER, "Expected `OF' after `ANY'");
             return NULL;
         }
-        args = args_get(PARSER, VARS, LOOPS, FUNCS, BREAKS, -1);
+        args = args_get(PARSER, VARS, FUNCS, BREAKS, -1);
         if (list_size(args) == 0) {
             error(PARSER, "No arguments supplied to ANY OF");
             list_delete(args);
@@ -824,7 +815,7 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
 
     /* DIFFRINT */
     if (parser_cmp(PARSER, "DIFFRINT")) {
-        struct list *args = args_get(PARSER, VARS, LOOPS, FUNCS, BREAKS, 2);
+        struct list *args = args_get(PARSER, VARS, FUNCS, BREAKS, 2);
         struct list *values = NULL;
         int types[2] = { NUMBR, NUMBAR };
         if (list_size(args) != 2) {
@@ -843,7 +834,7 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
 
     /* SMOOSH */
     if (parser_cmp(PARSER, "SMOOSH")) {
-        struct list *args = args_get(PARSER, VARS, LOOPS, FUNCS, BREAKS, -1);
+        struct list *args = args_get(PARSER, VARS, FUNCS, BREAKS, -1);
         struct list *values = NULL;
         int types[1] = { YARN };
         if (list_size(args) == 0) {
@@ -885,7 +876,7 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
         }
         /* Check for initialization */
         if (parser_cmp(PARSER, "ITZ")) {
-            struct value *value = evaluate_expr(PARSER, VARS, LOOPS, FUNCS, BREAKS);
+            struct value *value = evaluate_expr(PARSER, VARS, FUNCS, BREAKS);
             if (!value) {
                 error(PARSER, "Expected expression after `ITZ'");
                 value_delete(value);
@@ -912,7 +903,7 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
         /* Remove the R from the token stream */
         parser_cmp(PARSER, "R");
         /* Retrieve the value to assign */
-        value = evaluate_expr(PARSER, VARS, LOOPS, FUNCS, BREAKS);
+        value = evaluate_expr(PARSER, VARS, FUNCS, BREAKS);
         if (!value) {
             error(PARSER, "Invalid assignment expression");
             token_delete(token);
@@ -1022,7 +1013,7 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
             /* OMG */
             list_delete(parser_seek_list(PARSER, find));
             if (parser_cmp(PARSER, "OMG")) {
-                struct value *value = evaluate_expr(PARSER, VARS, LOOPS, FUNCS, BREAKS);
+                struct value *value = evaluate_expr(PARSER, VARS, FUNCS, BREAKS);
                 if (!value) {
                     error(PARSER, "Expected expression after `OMG'");
                     list_delete(find);
@@ -1066,7 +1057,8 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
 
     /* OIC */
     if (parser_cmp(PARSER, "OIC")) {
-        list_pop_front(BREAKS);
+        if (!strcmp(((struct token *)list_head(BREAKS))->data, "OIC"))
+            list_pop_front(BREAKS);
         return value_create_noob();
     }
 
@@ -1078,7 +1070,7 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
             error(PARSER, "Expected `RLY?' after `O'");
             return NULL;
         }
-        if (!VARS || !(value = state_read(VARS, "IT"))) return NULL;
+        if (!(value = state_read(VARS, "IT"))) return NULL;
         /* Save current scope state, restore it before returning */
         state_save(VARS);
         if (value_get_troof(value) == WIN) {
@@ -1088,21 +1080,15 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
             list_push_back(find, token_create_str("OIC"));
             list_delete(parser_seek_list(PARSER, find));
             list_delete(find);
+            /* Found OIC */
             if (!parser_cmp(PARSER, "YA")) return value_create_noob();
-            find = list_create(token_delete);
-            list_push_back(find, token_create_str("RLY"));
-            list_push_back(find, token_create_str("OIC"));
-            list_delete(parser_seek_list(PARSER, find));
-            list_delete(find);
-            if (parser_cmp(PARSER, "RLY")) {
-                state_restore(VARS);
-                return value_create_noob();
-            }
-            else {
+            /* Found YA */
+            if (!parser_cmp(PARSER, "RLY")) {
                 error(PARSER, "Expected `RLY' after `YA'");
                 return NULL;
             }
             state_restore(VARS);
+            return value_create_noob();
         }
         else {
             struct value *expr = NULL;
@@ -1114,7 +1100,7 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
                 list_delete(parser_seek_list(PARSER, find));
                 /* MEBBE */
                 if (parser_cmp(PARSER, "MEBBE")) {
-                    if (!(expr = evaluate_expr(PARSER, VARS, LOOPS, FUNCS, BREAKS))) {
+                    if (!(expr = evaluate_expr(PARSER, VARS, FUNCS, BREAKS))) {
                         error(PARSER, "Expected expression after `MEBBE'");
                         list_delete(find);
                         return NULL;
@@ -1168,122 +1154,137 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
         }
     }
 
-    /* IM IN YR */
+    /* IM IN YR ..., IM OUTTA YR ... */
     if (parser_cmp(PARSER, "IM")) {
-        if (parser_cmp(PARSER, "IN")) {
-            struct token *name = NULL;
-            struct token *op = NULL;
-            struct token *var = NULL;
-            struct list *update = NULL;
-            struct list *body = NULL;
-            struct list *guard = NULL;
-            if (!parser_cmp(PARSER, "YR")) {
-                error(PARSER, "Expected `YR' after `IM IN'");
-                return NULL;
-            }
-            name = parser_get(PARSER);
-            op = parser_get(PARSER);
-            if (!parser_cmp(PARSER, "YR")) {
-                error(PARSER, "Expected `YR' after loop operation");
-                token_delete(name);
-                token_delete(op);
-                return NULL;
-            }
-            var = parser_get(PARSER);
-            if (!state_read(VARS, var->data)) {
-                error(PARSER, "Loop variable not found");
-                token_delete(name);
-                token_delete(op);
-                token_delete(var);
-                return NULL;
-            }
-            /* Generate update */
-            update = list_create(token_delete);
-            list_push_back(update, token_create_str(var->data));
-            list_push_back(update, token_create_str("R"));
-            if (!strcmp(op->data, "UPPIN"))
-                list_push_back(update, token_create_str("SUM"));
-            else if (!strcmp(op->data, "NERFIN"))
-                list_push_back(update, token_create_str("DIFF"));
-            else {
-                error(PARSER, "Expected `UPPIN' or `NERFIN'");
-                token_delete(name);
-                token_delete(op);
-                token_delete(var);
-                list_delete(update);
-                return NULL;
-            }
-            list_push_back(update, token_create_str("OF"));
-            list_push_back(update, token_create_str(var->data));
-            list_push_back(update, token_create_str("AN"));
-            list_push_back(update, token_create_str("1"));
-            list_push_back(update, token_create_null(0));
-            /* Generate guard */
-            if (parser_cmp(PARSER, "TIL"))
-                guard = (struct list *)list_push_front(parser_seek(PARSER, NULL),
-                        token_create_str("NOT"));
-            else if (parser_cmp(PARSER, "WILE"))
-                guard = parser_seek(PARSER, NULL);
-            else if (parser_cmp_peek(PARSER, NULL)) {
-                guard = list_create(token_delete);
-                list_push_back(guard, token_create_str("WIN"));
-                list_push_back(guard, token_create_null(0));
-            }
-            else {
-                error(PARSER, "Invalid loop condition; expected `TIL' or `WILE'");
-                token_delete(name);
-                token_delete(op);
-                token_delete(var);
-                list_delete(guard);
-                return NULL;
-            }
-            /* Read in body */
-            body = parser_seek(PARSER, (const char *)name->data);
-            /* Update loops hash */
-            hash_insert(LOOPS, name->data, loop_create(update, guard, body));
-            /* Start first iteration */
-            list_push_front(BREAKS, token_create_str(name->data));
-            parser_put_back(PARSER, body);
+        struct token *name = NULL;
+        struct token *op = NULL;
+        struct token *var = NULL;
+        struct list *breaks = NULL;
+        struct list *update = NULL;
+        struct list *body = NULL;
+        struct list *guard = NULL;
+        struct parser *parser = NULL;
+        struct value *result = NULL;
+        if (!parser_cmp(PARSER, "IN")) {
+            error(PARSER, "Expected `IN' after `IM'");
+            return NULL;
+        }
+        if (!parser_cmp(PARSER, "YR")) {
+            error(PARSER, "Expected `YR' after `IM IN'");
+            return NULL;
+        }
+        name = parser_get(PARSER);
+        op = parser_get(PARSER);
+        if (!parser_cmp(PARSER, "YR")) {
+            error(PARSER, "Expected `YR' after loop operation");
+            token_delete(name);
+            token_delete(op);
+            return NULL;
+        }
+        var = parser_get(PARSER);
+        if (!state_read(VARS, var->data)) {
+            error(PARSER, "Loop variable not found");
             token_delete(name);
             token_delete(op);
             token_delete(var);
-            return value_create_noob();
+            return NULL;
         }
-        if (parser_cmp(PARSER, "OUTTA")) {
-            struct token *name = NULL;
-            struct loop *loop = NULL;
-            struct value *guard = NULL;
-            struct parser *parser = NULL;
-            if (!parser_cmp(PARSER, "YR")) {
-                error(PARSER, "Expected `YR' after `IM OUTTA'");
-                return NULL;
-            }
-            name = parser_get(PARSER);
-            loop = hash_find(LOOPS, name->data);
-            /* Perform guard check */
-            parser = parser_create_virtual(name->data);
-            parser_put_back(parser, loop->guard);
-            guard = evaluate_expr(parser, VARS, LOOPS, FUNCS, BREAKS);
-            if (guard->type != TROOF) {
-                error(PARSER, "Expected guard to return TROOF");
-                return NULL;
-            }
-            if (value_get_troof(guard) == WIN) {
-                /* Update loop variable */
-                parser_put_back(parser, loop->update);
-                evaluate_parser(parser, VARS, LOOPS, FUNCS, BREAKS);
-                /* Execute loop body */
-                list_push_front(BREAKS, token_create_str(name->data));
-                parser_put_back(PARSER, loop->body);
-            }
+        /* Generate update */
+        update = list_create(token_delete);
+        list_push_back(update, token_create_str(var->data));
+        list_push_back(update, token_create_str("R"));
+        if (!strcmp(op->data, "UPPIN"))
+            list_push_back(update, token_create_str("SUM"));
+        else if (!strcmp(op->data, "NERFIN"))
+            list_push_back(update, token_create_str("DIFF"));
+        else {
+            error(PARSER, "Expected `UPPIN' or `NERFIN'");
             token_delete(name);
-            value_delete(guard);
-            parser_delete(parser);
-            return value_create_noob();
+            token_delete(op);
+            token_delete(var);
+            list_delete(update);
+            return NULL;
         }
+        list_push_back(update, token_create_str("OF"));
+        list_push_back(update, token_create_str(var->data));
+        list_push_back(update, token_create_str("AN"));
+        list_push_back(update, token_create_str("1"));
+        list_push_back(update, token_create_null(0));
+        /* Generate guard */
+        if (parser_cmp(PARSER, "TIL")) {
+            guard = parser_seek(PARSER, NULL);
+            list_push_front(guard, token_create_str("NOT"));
+        }
+        else if (parser_cmp(PARSER, "WILE"))
+            guard = parser_seek(PARSER, NULL);
+        else if (parser_cmp(PARSER, NULL)) {
+            guard = list_create(token_delete);
+            list_push_back(guard, token_create_str("WIN"));
+            list_push_back(guard, token_create_null(0));
+        }
+        else {
+            error(PARSER, "Invalid loop condition; expected `TIL' or `WILE'");
+            token_delete(name);
+            token_delete(op);
+            token_delete(var);
+            list_delete(guard);
+            return NULL;
+        }
+        /* Read in body */
+        body = parser_seek(PARSER, (const char *)name->data);
+        list_pop_back(body);  /* loop name */
+        list_pop_back(body);  /* YR */
+        list_pop_back(body);  /* OUTTA */
+        list_pop_back(body);  /* IM */
+        /* Evaluate loop */
+        while (1) {
+            state_save(VARS);
+            /* Perform guard check */
+            parser = parser_create_bind(PARSER->name, guard);
+            result = evaluate_expr(parser, VARS, FUNCS, BREAKS);
+            parser_delete(parser);
+            if (!result || result->type != TROOF) {
+                error(PARSER, "Expected guard to return TROOF");
+                value_delete(result);
+                return NULL;
+            }
+            if (value_get_troof(result) == WIN) {
+                /* Evaluate loop body */
+                breaks = list_create(token_delete);
+                list_push_front(breaks, token_create_str(""));
+                parser = parser_create_bind(PARSER->name, body);
+                assert(!evaluate_parser(parser, VARS, FUNCS, breaks));
+                parser_delete(parser);
+                /* Check if we broke out of loop */
+                if (list_empty(breaks)) {
+                    list_delete(breaks);
+                    value_delete(result);
+                    break;
+                }
+                list_delete(breaks);
+                /* Update loop variable */
+                parser = parser_create_bind(PARSER->name, update);
+                assert(!evaluate_parser(parser, VARS, FUNCS, BREAKS));
+                parser_delete(parser);
+            }
+            else {
+                value_delete(result);
+                break;
+            }
+            value_delete(result);
+            state_restore(VARS);
+        }
+        state_restore(VARS);
+        list_delete(guard);
+        list_delete(body);
+        list_delete(update);
+        token_delete(var);
+        token_delete(op);
+        token_delete(name);
+        return value_create_noob();
     }
 
-    /* HOW DUZ I */
+    /* HOW DUZ I ..., IF U SAY SO */
     if (parser_cmp(PARSER, "HOW")) {
         struct token *name = NULL;
         struct item *head = NULL;
@@ -1352,22 +1353,26 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
             return NULL;
         }
         hash_insert(FUNCS, name->data, func_create(list_size(args), args, body));
+        token_delete(name);
         return value_create_noob();
     }
 
     /* FOUND YR */
     if (parser_cmp(PARSER, "FOUND")) {
-        struct value *expr = NULL;
+        struct value *value = NULL;
+        struct token *token = NULL;
         if (!parser_cmp(PARSER, "YR")) {
             error(PARSER, "Expected `YR' after `FOUND'");
             return NULL;
         }
-        if (!(expr = evaluate_expr(PARSER, VARS, LOOPS, FUNCS, BREAKS))) {
+        if (!(value = evaluate_expr(PARSER, VARS, FUNCS, BREAKS))) {
             error(PARSER, "Expected expression after `FOUND YR'");
             return NULL;
         }
-        parser_seek_end(PARSER);
-        return expr;
+        token = list_head(BREAKS);
+        list_delete(parser_seek(PARSER, token->data));
+        list_pop_front(BREAKS);
+        return value;
     }
 
     /* We must be left with value */
@@ -1394,51 +1399,54 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *LOOPS,
     /* FUNCTION */
     if (value = hash_find(FUNCS, token->data)) {
         struct parser *parser = NULL;
-        struct state *vars = state_create(data_delete_value, 1);
-        struct hash *loops = hash_create(data_delete_list, 1);
-        /*struct hash *funcs = hash_create(data_delete_func, 1);*/
+        struct list *breaks = NULL;
+        struct state *vars = NULL;
         struct func *func = (struct func *)value;
-        struct value *ret = NULL;
+        struct value *result = NULL;
         void * head = NULL;
         int status = 0;
         /* Retrieve all arguments */
-        struct list *args = args_get(PARSER, VARS, LOOPS, FUNCS, BREAKS, -1);
-        /* Check for proper number of arguments */
+        struct list *args = args_get(PARSER, VARS, FUNCS, BREAKS, -1);
+        /* Check for correct arity */
         if (list_size(args) != func->arity) {
             error(PARSER, "Invalid number of arguments");
             list_delete(args);
+            token_delete(token);
             return NULL;
         }
+        vars = state_create(data_delete_value, 1);
         /* Populate variables with arguments */
-        head = list_head(func->args);
-        do {
-            struct token *arg = (struct token *)list_head(func->args);
-            state_write(vars, arg->data, (struct value *)list_head(args));
-            list_shift_down(args);
-            list_shift_down(func->args);
+        if (func->arity > 0) {
+            head = list_head(func->args);
+            do {
+                struct token *arg = (struct token *)list_head(func->args);
+                state_write(vars, arg->data, value_copy((struct value *)list_head(args)));
+                list_pop_front(args);
+                list_shift_down(func->args);
+            }
+            while (list_head(func->args) != head);
         }
-        while (list_head(func->args) != head);
-        /* TODO: should we allow shadowing of arguments? For now, yes. */
-        state_save(vars);
-        /* Initialize the default IT variable */
+        list_delete(args);
+
         state_write(vars, "IT", value_create_noob());
+        breaks = list_create(token_delete);
+        list_push_front(breaks, token_create_str(""));
 
-        parser = parser_create(NULL, token->data, NULL, NULL, 0, NULL);
-        parser_put_back(parser, func->body);
-        /* GTFO skips the rest of the function body */
-        list_push_front(BREAKS, token_create_str(""));
-        /* Note that we inherit FUNCS */
-        status = evaluate_parser(parser, vars, loops, FUNCS, BREAKS);
-        ret = value_copy(state_read(vars, "IT"));
+        parser = parser_create_bind(PARSER->name, func->body);
+        assert(!evaluate_parser(parser, vars, FUNCS, breaks));
+        parser_delete(parser);
 
-        /*hash_delete(funcs);*/
-        hash_delete(loops);
+        result = value_copy(state_read(vars, "IT"));
+
+        list_delete(breaks);
         state_delete(vars);
-        return (status ? NULL : ret);
+        token_delete(token);
+        return result;
     }
 
     /* UNABLE TO EVALUATE */
-    list_push_front(PARSER->tokens, token);
+    parser_unget(PARSER);
+    token_delete(token);
     return NULL;
 }
 
@@ -1450,7 +1458,6 @@ main(int ARGC, char **ARGV)
     struct list *keep = NULL;
     struct list *breaks = NULL;
     struct state *vars = NULL;
-    struct hash *loops = NULL;
     struct hash *funcs = NULL;
     FILE *file = stdin;
     int n, status;
@@ -1484,7 +1491,6 @@ main(int ARGC, char **ARGV)
     }
 
     vars = state_create(data_delete_value, 1);
-    loops = hash_create(data_delete_loop, 1);
     funcs = hash_create(data_delete_func, 1);
     breaks = list_create(token_delete);
     /* Note that we will never break from main body */
@@ -1493,6 +1499,11 @@ main(int ARGC, char **ARGV)
     /* Initialize the default IT variable */
     state_write(vars, "IT", value_create_noob());
 
+    /* OBTW ... TLDR */
+    if (parser_cmp(parser, "OBTW")) {
+        list_delete(parser_seek(parser, "TLDR"));
+        parser_cmp(parser, NULL);
+    }
     /* HAI <VERSION> */
     if (!parser_cmp(parser, "HAI")) {
         error(parser, "Expected HAI token");
@@ -1507,12 +1518,11 @@ main(int ARGC, char **ARGV)
         goto DONE;
     }
 
-    status = evaluate_parser(parser, vars, loops, funcs, breaks);
+    status = evaluate_parser(parser, vars, funcs, breaks);
 
 DONE:
     list_delete(breaks);
     hash_delete(funcs);
-    hash_delete(loops);
     state_delete(vars);
     parser_delete(parser);
     list_delete(ignore);

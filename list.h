@@ -277,6 +277,42 @@ list_push_front(struct list *LIST, void *DATA)
 }
 
     int
+list_move_front(struct list *TO, struct list* FROM)
+    /* Moves the front of FROM to the front of TO using a pointer swap.  FROM
+     * must contain at least 1 item. Returns the new size of TO. */
+{
+    struct item *item = NULL;
+    assert(FROM);
+    assert(TO);
+    assert(list_size(FROM) > 0);
+    item = FROM->head;
+    /* Perform a pop without deleting item */
+    if (FROM->head == FROM->tail) {
+        FROM->head = NULL;
+        FROM->tail = NULL;
+    }
+    else {
+        FROM->head->next->prev = NULL;
+        FROM->head = FROM->head->next;
+    }
+    FROM->size--;
+    /* Perform a push */
+    if (list_empty(TO)) {
+        item->next = NULL;
+        item->prev = NULL;
+        TO->head = item;
+        TO->tail = item;
+    }
+    else {
+        item->prev = NULL;
+        item->next = TO->head;
+        TO->head->prev = item;
+        TO->head = item;
+    }
+    return ++TO->size;
+}
+
+    int
 list_pop_front(struct list *LIST)
     /* Deletes the first item of LIST and returns LIST's new size */
 {
@@ -356,6 +392,30 @@ list_print(struct list *LIST)
                 item->prev,
                 item->next,
                 item->data);
+        item = item->next;
+    }
+}
+
+    void
+list_print_str(struct list *LIST, void (*PRINT)(void *))
+    /* Displays the addresses and linkage of a list, treating data like
+     * strings */
+{
+    struct item *item;
+    assert(LIST);
+    item = LIST->head;
+    printf("======\n");
+    printf("<LIST> Size: %4d\n", list_size(LIST));
+    while (item != 0) {
+        if (item == LIST->head) printf("<HEAD> ");
+        if (item == LIST->tail) printf("<TAIL> ");
+        if (item != LIST->head && item != LIST->tail) printf("       ");
+        printf("Addr: %8p, Prev: %8p, Next: %8p; Data: ",
+                item,
+                item->prev,
+                item->next);
+        PRINT(item->data);
+        printf("\n");
         item = item->next;
     }
 }

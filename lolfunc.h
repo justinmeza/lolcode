@@ -38,37 +38,6 @@
 #include "list.h"
 #include "loltypes.h"
 
-/* lolcode loop implementation */
-
-struct loop {
-    struct list *update;
-    struct list *guard;
-    struct list *body;
-};
-
-    struct loop *
-loop_create(struct list *UPDATE, struct list *GUARD, struct list *BODY)
-{
-    struct loop *loop = malloc(sizeof(struct loop));
-    assert(UPDATE);
-    assert(GUARD);
-    assert(BODY);
-    loop->update = UPDATE;
-    loop->guard = GUARD;
-    loop->body = BODY;
-    return loop;
-}
-
-    void
-loop_delete(struct loop *LOOP)
-{
-    assert(LOOP);
-    list_delete(LOOP->update);
-    list_delete(LOOP->guard);
-    list_delete(LOOP->body);
-    free(LOOP);
-}
-
 /* lolcode function implementation */
 
 struct func {

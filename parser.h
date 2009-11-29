@@ -142,6 +142,7 @@ struct parser {
     struct list *ignore;
     struct list *keep;
     struct list *tokens;
+    struct list *history;
     int (*rules)(char *, size_t, unsigned int *, unsigned int *);
 };
 
@@ -162,6 +163,27 @@ token_list_cmp(struct list *LIST, char *BUFFER, unsigned int SIZE)
 }
 
 /* Functions for use with tokens */
+
+    void
+token_print(void *DATA)
+    /* Prints a token's contents */
+{
+    struct token *token = (struct token *)DATA;
+    printf("%s", token->data);
+}
+
+    struct token *
+token_copy(const struct token *TOKEN)
+    /* Creates a copy of TOKEN */
+{
+    struct token *token = malloc(sizeof(struct token));
+    token->data = malloc(sizeof(char) * (strlen(TOKEN->data) + 1));
+    strcpy(token->data, TOKEN->data);
+    token->line = TOKEN->line;
+    token->column = TOKEN->column;
+    token->null = TOKEN->null;
+    return token;
+}
 
     struct token *
 token_create_str(const char *STRING)
@@ -269,6 +291,24 @@ parser_create_virtual(const char *NAME)
 }
 
     struct parser *
+parser_create_bind(const char *NAME, struct list *LIST)
+{
+    struct parser *parser = malloc(sizeof(struct parser));
+    parser->fd = NULL;
+    parser->name = malloc(sizeof(char) * (strlen(NAME) + 1));
+    strcpy(parser->name, NAME);
+    parser->tokens = LIST;
+    parser->ignore = NULL;
+    parser->keep = NULL;
+    parser->line = 0;
+    parser->column = 0;
+    parser->buffer = 0;
+    parser->history = list_create(token_delete);
+    parser->rules = NULL;
+    return parser;
+}
+
+    struct parser *
 parser_create(FILE *_FILE, const char *NAME, struct list *IGNORE, struct list *KEEP, unsigned int BUFFER,
         int (*RULES)(char *, size_t, unsigned int *, unsigned int *))
     /* Creates a new parser which reads from _FILE, splitting tokens separated
@@ -288,8 +328,18 @@ parser_create(FILE *_FILE, const char *NAME, struct list *IGNORE, struct list *K
     parser->line = 0;
     parser->column = 0;
     parser->buffer = BUFFER;
+    parser->history = list_create(token_delete);
     parser->rules = RULES;
     return parser;
+}
+
+    void
+parser_unget(struct parser *PARSER)
+    /* Removes a token from the history of PARSER and places it back in its
+     * token stream. */
+{
+    assert(PARSER);
+    list_move_front(PARSER->tokens, PARSER->history);
 }
 
     void
@@ -298,8 +348,13 @@ parser_delete(struct parser *PARSER)
      * up its list of tokens waiting to be read. */
 {
     assert(PARSER);
-    if (PARSER->fd != NULL) fclose(PARSER->fd);
-    list_delete(PARSER->tokens);
+    if (PARSER->fd != NULL) {
+        fclose(PARSER->fd);
+        list_delete(PARSER->tokens);
+    }
+    /* Rewind our bound list */
+    else while (!list_empty(PARSER->history)) parser_unget(PARSER);
+    list_delete(PARSER->history);
     free(PARSER->name);
     free(PARSER);
 }
@@ -329,7 +384,8 @@ parser_get(struct parser *PARSER)
      * 0.2.1.2 Check for any data to ignore but split tokens upon
      * 0.2.1.3 Check for any data to keep and split tokens upon
      * 0.2.1.4 Divide our input buffer into tokens
-     * 1 Return the next token in the token stream */
+     * 1 Return the next token in the token stream
+     * 2 Save the token in the parser's history */
 {
     struct item *item = NULL;
     struct token *token = NULL;
@@ -403,13 +459,9 @@ parser_get(struct parser *PARSER)
         free(buf);
     }
     /* 1 Return the next token in the token stream */
-    token = (struct token *)list_head(PARSER->tokens);
-    saved = token_create(token->data,
-            strlen(token->data),
-            token->line,
-            token->column,
-            token->null);
-    list_pop_front(PARSER->tokens);
+    saved = token_copy((struct token*)list_head(PARSER->tokens));
+    /* 2 Save the token in the parser's history */
+    list_move_front(PARSER->history, PARSER->tokens);
     return saved;
 }
 
@@ -420,27 +472,26 @@ parser_cmp(struct parser *PARSER, const char *TOKEN)
      * returned and the stream remains unaltered. */
 {
     struct token *token = NULL;
+    int result = 1;
     assert(PARSER);
     token = parser_get(PARSER);
-    assert(token);
     /* Check for null tokens and token string equality */
     if ((!TOKEN && !token->null) || (TOKEN && strcmp(TOKEN, token->data))) {
-        list_push_front(PARSER->tokens, token);
-        return 0;
+        parser_unget(PARSER);
+        result = 0;
     }
     token_delete(token);
-    return 1;
+    return result;
 }
 
     int
-parser_cmp_at(struct parser *PARSER, int POS, const char *TOKEN)
+parser_cmp_at(struct parser *PARSER, unsigned int POS, const char *TOKEN)
     /* Seeks to an arbitrary position POS in the token stream and returns 1 if
      * the token value at that position is the same as STR and 0 if not. */
 {
-    struct item *item;
-    struct token *token;
+    struct item *item = NULL;
+    struct token *token = NULL;
     unsigned int n;
-    assert(POS >= 0);
     assert(PARSER);
     if (list_size(PARSER->tokens) <= POS) return 0;
     /* Seek */
@@ -460,31 +511,14 @@ parser_cmp_peek(struct parser *PARSER, const char *TOKEN)
      * stream. */
 {
     struct token *token = NULL;
-    int status = 1;
+    int result = 1;
     assert(PARSER);
-    assert(PARSER->tokens);
     token = parser_get(PARSER);
     if ((!TOKEN && !token->null) || (TOKEN && strcmp(TOKEN, token->data)))
-        status = 0;
-    list_push_front(PARSER->tokens, token);
-    return status;
-}
-
-    int
-parser_ignore(struct parser *PARSER, const char *TOKEN)
-    /* Ignores a particular token if it appears next in the token stream */
-{
-    struct token *token = NULL;
-    assert(PARSER);
-    token = parser_get(PARSER);
-    assert(token);
-    /* Check for null tokens and token string equality */
-    if ((!TOKEN && !token->null) || strcmp(TOKEN, token->data)) {
-        list_push_front(PARSER->tokens, token);
-        return 0;
-    }
+        result = 0;
+    parser_unget(PARSER);
     token_delete(token);
-    return 1;
+    return result;
 }
 
     struct list *
@@ -498,7 +532,6 @@ parser_seek(struct parser *PARSER, const char *TOKEN)
     list = list_create(token_delete);
     do {
         token = parser_get(PARSER);
-        if (!token) continue;
         /* TODO: Can both of the list_push_backs be moved here? (Maybe similar
          * for other functions, too?) */
         if ((!TOKEN && token->null) || (TOKEN && !strcmp(TOKEN, token->data))) {
@@ -530,7 +563,8 @@ parser_seek_list(struct parser *PARSER, struct list *LIST)
         do {
             struct item *item = (struct item *)list_head(LIST);
             if (!strcmp(item->data, token->data)) {
-                list_push_front(PARSER->tokens, token);
+                parser_unget(PARSER);
+                token_delete(token);
                 /* TODO: Does this belong here:
                 list_delete(LIST); */
                 return list;
@@ -543,13 +577,6 @@ parser_seek_list(struct parser *PARSER, struct list *LIST)
     while (!parser_empty(PARSER));
     list_delete(LIST);
     return list;
-}
-
-    void
-parser_seek_end(struct parser *PARSER)
-{
-    assert(PARSER);
-    while (!parser_empty(PARSER)) token_delete(parser_get(PARSER));
 }
 
     void
