@@ -180,7 +180,7 @@ value_cast_troof(struct value *VALUE)
         else data = WIN;
     }
     /* NUMBAR to TROOF */
-    if (VALUE->type == NUMBAR) {
+    else if (VALUE->type == NUMBAR) {
         if (value_get_numbar(VALUE) == 0.0) data = FAIL;
         else data = WIN;
     }
