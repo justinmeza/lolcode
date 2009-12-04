@@ -439,14 +439,16 @@ parser_get(struct parser *PARSER)
                             0);
                     list_push_back(PARSER->tokens, token);
                     /* Check for multiple null tokens */
-                    token = (struct token *)list_tail(PARSER->tokens);
+                    token = list_empty(PARSER->tokens) ? NULL :
+                            (struct token *)list_tail(PARSER->tokens);
                     if (token && !token->null) list_push_back(PARSER->tokens,
                             token_create_null(PARSER->line));
 
                 }
                 else if (pos == start) {
-                    token = (struct token *)list_tail(PARSER->tokens);
-                    /* Check for no tokens or multiple null tokens */
+                    /* Check for no tokens or multiple null tokens*/
+                    token = list_empty(PARSER->tokens) ? NULL :
+                            (struct token *)list_tail(PARSER->tokens);
                     if (!token || !token->null) list_push_back(PARSER->tokens,
                             token_create_null(PARSER->line));
                 }

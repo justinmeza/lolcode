@@ -416,7 +416,6 @@ evaluate_parser(struct parser *PARSER, struct state *VARS, struct hash *FUNCS,
             error(PARSER, "Unexpected token");
             /* TODO: try returning the unexpected token and deleting it
              * later */
-            if (value) value_delete(value);
             return 1;
         }
     }
@@ -865,8 +864,7 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *FUNCS,
         }
         /* Make sure next token is non-NULL and unique */
         /* TODO: check for reserved keyword */
-        if (parser_cmp_peek(PARSER, NULL)
-                || !(token = parser_get(PARSER))) {
+        if (parser_cmp_peek(PARSER, NULL) || !(token = parser_get(PARSER))) {
             error(PARSER, "Variable name expected");
             return NULL;
         }
