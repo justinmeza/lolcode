@@ -1399,6 +1399,7 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *FUNCS,
         struct parser *parser = NULL;
         struct list *breaks = NULL;
         struct state *vars = NULL;
+        struct list *body = NULL;
         struct func *func = (struct func *)value;
         struct value *result = NULL;
         void * head = NULL;
@@ -1430,12 +1431,23 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *FUNCS,
         breaks = list_create(token_delete);
         list_push_front(breaks, token_create_str(""));
 
-        parser = parser_create_bind(PARSER->name, func->body);
+        /* Copy function body, to enable recursion */
+        body = list_create(token_delete);
+        head = list_head(func->body);
+        do {
+            struct token *token = (struct token *)list_head(func->body);
+            list_push_back(body, token_copy(token));
+            list_shift_down(func->body);
+        }
+        while (list_head(func->body) != head);
+
+        parser = parser_create_bind(PARSER->name, body);
         assert(!evaluate_parser(parser, vars, FUNCS, breaks));
         parser_delete(parser);
 
         result = value_copy(state_read(vars, "IT"));
 
+        list_delete(body);
         list_delete(breaks);
         state_delete(vars);
         token_delete(token);
