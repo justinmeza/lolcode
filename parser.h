@@ -274,23 +274,6 @@ parser_rules(char *BUF, size_t LEN, unsigned int *START, unsigned int *POS)
 */
 
     struct parser *
-parser_create_virtual(const char *NAME)
-{
-    struct parser *parser = malloc(sizeof(struct parser));
-    parser->fd = NULL;
-    parser->name = malloc(sizeof(char) * (strlen(NAME) + 1));
-    strcpy(parser->name, NAME);
-    parser->tokens = list_create(token_delete);
-    parser->ignore = NULL;
-    parser->keep = NULL;
-    parser->line = 0;
-    parser->column = 0;
-    parser->buffer = 0;
-    parser->rules = NULL;
-    return parser;
-}
-
-    struct parser *
 parser_create_bind(const char *NAME, struct list *LIST)
 {
     struct parser *parser = malloc(sizeof(struct parser));
