@@ -171,8 +171,10 @@ value_cast_troof(struct value *VALUE)
     troof data;
     assert(VALUE);
     /* NOOB to TROOF */
+    if (VALUE->type == NOOB)
+        data = FAIL;
     /* TROOF to TROOF */
-    if (VALUE->type == TROOF)
+    else if (VALUE->type == TROOF)
         data = value_get_troof(VALUE);
     /* NUMBR to TROOF */
     else if (VALUE->type == NUMBR) {

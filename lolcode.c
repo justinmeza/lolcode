@@ -733,26 +733,27 @@ evaluate_expr(struct parser *PARSER, struct state *VARS, struct hash *FUNCS,
     if (parser_cmp(PARSER, "NOT")) {
         /* Retrieve one argument */
         struct list *args = args_get(PARSER, VARS, FUNCS, BREAKS, 1);
+        struct list *values = NULL;
         struct value *value = NULL;
         struct value *result = NULL;
+        int types[1] = { TROOF };
         /* Check for correct number of arguments */
         if (list_size(args) != 1) {
             error(PARSER, "Wrong number of arguments to NOT");
             list_delete(args);
             return NULL;
         }
+        values = args_convert(args, types, 1);
         /* Apply the NOT operation */
-        value = (struct value *)list_head(args);
+        value = (struct value *)list_head(values);
         if (value->type != TROOF) {
             error(PARSER, "Invalid argument to NOT");
-            list_delete(args);
+            list_delete(values);
             return NULL;
         }
-        if (value_get_troof(value) == WIN)
-            result = value_create_troof(FAIL);
-        else
-            result = value_create_troof(WIN);
-        list_delete(args);
+        if (value_get_troof(value) == WIN) result = value_create_troof(FAIL);
+        else result = value_create_troof(WIN);
+        list_delete(values);
         return result;
     }
 
