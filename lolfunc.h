@@ -38,36 +38,6 @@
 #include "list.h"
 #include "loltypes.h"
 
-/* lolcode function implementation */
-
-struct func {
-    int arity;
-    struct list *args;
-    struct list *body;
-};
-
-    struct func *
-func_create(int ARITY, struct list *ARGS, struct list *BODY)
-{
-    struct func *func = malloc(sizeof(struct func));
-    assert(ARITY >= 0);
-    assert(ARGS);
-    assert(BODY);
-    func->arity = ARITY;
-    func->args = ARGS;
-    func->body = BODY;
-    return func;
-}
-
-    void
-func_delete(struct func *FUNC)
-{
-    assert(FUNC);
-    list_delete(FUNC->args);
-    list_delete(FUNC->body);
-    free(FUNC);
-}
-
 /* LOLCODE standard functions */
 
 /* Each of these functions accept and return pointers to value structures. Type

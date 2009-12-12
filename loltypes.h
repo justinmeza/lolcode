@@ -50,11 +50,17 @@ enum type {
     NUMBR,
     NUMBAR,
     YARN,
+    FUNKSHUN,
 };
 
 enum troof {
     FAIL,
     WIN,
+};
+
+struct funkshun {
+    struct list *args;
+    struct list *body;
 };
 
 typedef int numbr;
@@ -105,6 +111,15 @@ value_get_yarn(struct value *VALUE)
     return ((yarn)(VALUE->data));
 }
 
+    struct funkshun *
+value_get_funkshun(struct value *VALUE)
+{
+    assert(VALUE);
+    assert(VALUE->type == FUNKSHUN);
+    assert(VALUE->data);
+    return ((struct funkshun *)(VALUE->data));
+}
+
 /* Functions for creating values */
 
     struct value *
@@ -153,6 +168,22 @@ value_create_yarn(yarn DATA)
     value->type = YARN;
     value->data = malloc(sizeof(char) * (strlen(DATA) + 1));
     strcpy(value->data, DATA);
+    return value;
+}
+
+    struct value *
+value_create_funkshun(struct list *ARGS, struct list *BODY)
+{
+    struct value *value = NULL;
+    struct funkshun *funkshun = NULL;
+    assert(ARGS);
+    assert(BODY);
+    value = malloc(sizeof(struct value));
+    value->type = FUNKSHUN;
+    funkshun = malloc(sizeof(struct funkshun));
+    funkshun->args = ARGS;
+    funkshun->body = BODY;
+    value->data = funkshun;
     return value;
 }
 
@@ -400,7 +431,8 @@ value_cmp(struct value *LEFT, struct value *RIGHT)
             return value_get_numbar(LEFT) == value_get_numbar(RIGHT);
         case YARN:
             return !strcmp(value_get_yarn(LEFT), value_get_yarn(RIGHT));
-        default: return 0;
+        /* Invalid types */
+        default: assert(0);
     }
     return 0;
 }
@@ -421,6 +453,26 @@ value_copy(struct value *VALUE)
             return value_create_numbar(value_get_numbar(VALUE));
         case YARN:
             return value_create_yarn(value_get_yarn(VALUE));
+        case FUNKSHUN: {
+            struct funkshun *funkshun = (struct funkshun *)VALUE->data;
+            struct list *args = list_create(token_delete);
+            struct list *body = list_create(token_delete);
+            void *head = list_head(funkshun->args);
+            do {
+                struct token *token = (struct token *)list_head(funkshun->args);
+                list_push_back(args, token_copy(token));
+                list_shift_down(funkshun->args);
+            }
+            while (list_head(funkshun->args) != head);
+            head = list_head(funkshun->body);
+            do {
+                struct token *token = (struct token *)list_head(funkshun->body);
+                list_push_back(body, token_copy(token));
+                list_shift_down(funkshun->body);
+            }
+            while (list_head(funkshun->body) != head);
+            return value_create_funkshun(args, body);
+        }
     }
     return NULL;
 }
@@ -429,6 +481,14 @@ value_copy(struct value *VALUE)
 value_delete(struct value *VALUE)
 {
     assert(VALUE);
+    /* Need to free FUNKSHUNs specially */
+    if (VALUE->type == FUNKSHUN) {
+        struct funkshun *funkshun = (struct funkshun *)VALUE->data;
+        assert(funkshun->args);
+        assert(funkshun->body);
+        free(funkshun->args);
+        free(funkshun->body);
+    }
     if (VALUE->data) free(VALUE->data);
     free(VALUE);
 }
