@@ -79,9 +79,10 @@
  * not be dealt with directly. */
 
 struct state {
+    void (*delete)(void *);
+    void *(*copy)(const void *);
     struct list *data;
     unsigned int size;
-    void (*delete)(void *);
 };
 
     void
@@ -91,20 +92,29 @@ data_delete_hash(void *DATA)
     hash_delete(DATA);
 }
 
+    void *
+data_copy_hash(const void *DATA)
+    /* Copies pointers to hashes */
+{
+    return (void *)hash_copy((const struct hash *)DATA);
+}
+
 /* Functions for use with states */
 
     struct state *
-state_create(void (*DELETE)(void *), unsigned int SIZE)
+state_create(void (*DELETE)(void *), void *(*COPY)(const void *), unsigned int SIZE)
     /* Creates a state with a hash of SIZE buckets */
 {
     struct state *state = NULL;
     struct hash *hash = NULL;
     assert(DELETE);
+    assert(COPY);
     state = malloc(sizeof(struct state));
-    state->data = list_create(data_delete_hash);
+    state->data = list_create(data_delete_hash, data_copy_hash);
     state->size = SIZE;
     state->delete = DELETE;
-    hash = hash_create(state->delete, state->size);
+    state->copy = COPY;
+    hash = hash_create(state->delete, state->copy, state->size);
     list_push_front(state->data, hash);
     return state;
 }
@@ -124,7 +134,7 @@ state_save(struct state *STATE)
 {
     struct hash *hash = NULL;
     assert(STATE);
-    hash = hash_create(STATE->delete, STATE->size);
+    hash = hash_create(STATE->delete, STATE->copy, STATE->size);
     list_push_front(STATE->data, hash);
 }
 
@@ -224,6 +234,20 @@ state_insert(struct state *STATE, void *KEY, void *DATA)
     list = STATE->data;
     hash = (struct hash *)list_head(list);
     if (!hash_find(hash, KEY)) hash_insert(hash, KEY, DATA);
+}
+
+    struct state *
+state_copy(const struct state *STATE)
+{
+    struct state *state = NULL;
+    struct hash *hash = NULL;
+    assert(STATE);
+    state = malloc(sizeof(struct state));
+    state->data = list_copy(STATE->data);
+    state->size = STATE->size;
+    state->delete = STATE->delete;
+    state->copy = STATE->copy;
+    return state;
 }
 
 #endif /* __STATE__ */

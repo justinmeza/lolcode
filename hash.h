@@ -101,12 +101,14 @@
 
 struct hash {
     void (*delete)(void *);
+    void *(*copy)(const void *);
     unsigned int size;
     struct list **table;
 };
 
 struct pair {
     void (*delete)(void *);     /* Same as hash's delete function */
+    void *(*copy)(const void *);/* Same as hash's copy function */
     void *key;
     void *value;
 };
@@ -118,6 +120,7 @@ pair_create(struct hash* HASH, void *KEY, void *VALUE)
 {
     struct pair *pair = malloc(sizeof(struct pair));
     pair->delete = HASH->delete;
+    pair->copy = HASH->copy;
     /* >>>>> Begin key-specific code */
     pair->key = malloc(sizeof(char) * (strlen(KEY) + 1));
     strcpy(pair->key, KEY);
@@ -140,10 +143,33 @@ pair_delete(struct pair *PAIR)
     return 0;
 }
 
+    struct pair *
+pair_copy(const struct pair *PAIR)
+    /* Make sure any data stored in PAIR->value is freed prior to calling this
+     * function. */
+{
+    struct pair *pair = malloc(sizeof(struct pair));
+    pair->delete = PAIR->delete;
+    pair->copy = PAIR->copy;
+    /* >>>>> Begin key-specific code */
+    pair->key = malloc(sizeof(char) * (strlen(PAIR->key) + 1));
+    strcpy(pair->key, PAIR->key);
+    /* <<<<< End key-specific code */
+    pair->value = PAIR->copy(PAIR->value);
+    return pair;
+}
+
     void
 data_delete_pair(void *DATA)
 {
     pair_delete(DATA);
+}
+
+    void *
+data_copy_pair(const void *DATA)
+{
+    assert(DATA);
+    return (void *)pair_copy((const struct pair *)DATA);
 }
 
     unsigned int
@@ -166,33 +192,21 @@ hash_map(struct hash *HASH, void *DATA)
 
 /* Functions for use with hashes */
 
-/* Here is some template code for the delete function. Copy it into your code
- * and replace the T in data_delete_T with the data type being deleted. Then,
- * free all of DATA's memory and free DATA itself. Then, pass this function as
- * the DELETE argument of list_create. */
-
-/*
-    void
-data_delete_T(void *DATA)
-{
-    free(DATA->my_pointer);     // Example
-    free(DATA);
-}
-*/
-
     struct hash *
-hash_create(void (*DELETE)(void *), unsigned int SIZE)
+hash_create(void (*DELETE)(void *), void *(*COPY)(const void *), unsigned int SIZE)
     /* Creates a hash of SIZE buckets. A prime number proportional to the size
      * of the potential data set is recommended to reduce collisions and lookup
-     * time. DELETE is the function used to properly free the hash's data. */
+     * time. DELETE is the function used to properly free the hash's data. COPY
+     * is the function used to properly copy the hash's data. */
 {
     struct hash *hash = malloc(sizeof(struct hash));
     unsigned int n;
     hash->delete = DELETE;
+    hash->copy = COPY;
     hash->size = SIZE;
     hash->table = malloc(sizeof(struct list *) * hash->size);
     for (n = 0; n < hash->size; n++)
-        (hash->table)[n] = list_create(data_delete_pair);
+        (hash->table)[n] = list_create(data_delete_pair, data_copy_pair);
     return hash;
 }
 
@@ -270,6 +284,24 @@ hash_remove(struct hash *HASH, void *KEY)
         else list_shift_down(list);
     }
     while (list_head(list) != head);
+}
+
+    struct hash *
+hash_copy(const struct hash *HASH)
+    /* Copies the contents of HASH */
+{
+    struct hash *hash = NULL;
+    struct list *table = NULL;
+    unsigned int n;
+    assert(HASH);
+    hash = malloc(sizeof(struct hash));
+    hash->delete = HASH->delete;
+    hash->copy = HASH->copy;
+    hash->size = HASH->size;
+    hash->table = malloc(sizeof(struct list *) * hash->size);
+    for (n = 0; n < HASH->size; n++)
+        (hash->table)[n] = list_copy((HASH->table)[n]);
+    return hash;
 }
 
 #endif /* __HASH__ */

@@ -88,6 +88,8 @@
 #ifndef __LIST__
 #define __LIST__
 
+#include <stdlib.h>
+#include <stdio.h>                     /* For list_print functions */
 #include <assert.h>
 
 /* Structures and functions required for internal implementation. These need
@@ -101,6 +103,7 @@ struct item {
 
 struct list {
     void (*delete)(void *);
+    void *(*copy)(const void *);
     struct item *head;
     struct item *tail;
     unsigned int size;
@@ -142,13 +145,27 @@ data_delete_T(void *DATA)
 }
 */
 
+/* Here is some template code for the copy function. Copy it into your code and
+ * replace the T in data_copy_T with the data type being copied. Then, copy the
+ * data in DATA and return a void pointer to it. Then, pass this function as the
+ * COPY argument of list_create. */
+
+/*
+    void
+data_copy_T(void *DATA)
+{
+    // Return a void pointer to a copy of DATA
+}
+*/
+
     struct list *
-list_create(void (*DELETE)(void *))
-    /* Creates a list whose contents is meant to be deleted using DELETE. See
-     * data_delete_T for more information. */
+list_create(void (*DELETE)(void *), void *(*COPY)(const void *))
+    /* Creates a list whose contents is meant to be deleted using DELETE and
+     * copied using COPY. See above for more information on these functions. */
 {
     struct list *list = malloc(sizeof(struct list));
     list->delete = DELETE;
+    list->copy = COPY;
     list->head = NULL;
     list->tail = NULL;
     list->size = 0;
@@ -374,6 +391,22 @@ list_tail(struct list *LIST)
     return LIST->tail->data;
 }
 
+    struct list *
+list_copy(struct list *LIST)
+    /* Copies the contents of LIST */
+{
+    struct list *list;
+    struct item *item;
+    assert(LIST);
+    list = list_create(LIST->delete, LIST->copy);
+    item = LIST->head;
+    while (item != NULL) {
+        list_push_back(list, LIST->copy(item->data));
+        item = item->next;
+    }
+    return list;
+}
+
     void
 list_print(struct list *LIST)
     /* Displays the addresses and linkage of a list */
@@ -383,7 +416,7 @@ list_print(struct list *LIST)
     item = LIST->head;
     printf("======\n");
     printf("<LIST> Size: %4d\n", list_size(LIST));
-    while (item != 0) {
+    while (item != NULL) {
         if (item == LIST->head) printf("<HEAD> ");
         if (item == LIST->tail) printf("<TAIL> ");
         if (item != LIST->head && item != LIST->tail) printf("       ");
@@ -397,7 +430,7 @@ list_print(struct list *LIST)
 }
 
     void
-list_print_str(struct list *LIST, void (*PRINT)(void *))
+list_print_str(struct list *LIST, void (*PRINT)(const void *))
     /* Displays the addresses and linkage of a list, treating data like
      * strings */
 {
@@ -406,7 +439,7 @@ list_print_str(struct list *LIST, void (*PRINT)(void *))
     item = LIST->head;
     printf("======\n");
     printf("<LIST> Size: %4d\n", list_size(LIST));
-    while (item != 0) {
+    while (item != NULL) {
         if (item == LIST->head) printf("<HEAD> ");
         if (item == LIST->tail) printf("<TAIL> ");
         if (item != LIST->head && item != LIST->tail) printf("       ");
