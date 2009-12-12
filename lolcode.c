@@ -61,13 +61,6 @@
 #include "lolfunc.h"
 
     void
-data_delete_value(void *DATA)
-    /* Deletes pointers to values */
-{
-    value_delete(DATA);
-}
-
-    void
 data_delete_list(void *DATA)
     /* Deletes pointers to lists */
 {
@@ -304,7 +297,7 @@ args_get(struct parser *PARSER, struct state *STATE, struct list *BREAKS,
     assert(PARSER);
     assert(STATE);
     assert(BREAKS);
-    args = list_create(data_delete_value);
+    args = list_create(data_delete_value, data_copy_value);
     while (NUM--) {
         if ((arg = evaluate_expr(PARSER, STATE, BREAKS, VERSION)) == NULL) break;
         list_push_back(args, arg);
@@ -320,7 +313,7 @@ args_convert(struct list *LIST, int *TYPES, unsigned int SIZE)
      * TYPES array and a simple two step process, described below. SIZE is the
      * size of the TYPES array. */
 {
-    struct list *list = list_create(data_delete_value);
+    struct list *list = list_create(data_delete_value, data_copy_value);
     /* For each value in LIST, */
     while (!list_empty(LIST)) {
         struct value *value = (struct value *)list_head(LIST);
@@ -1024,7 +1017,7 @@ evaluate_expr(struct parser *PARSER, struct state *STATE, struct list *BREAKS,
         struct value *it = NULL;
         struct list *find = NULL;
         if (!STATE || !(it = state_read(STATE, "IT"))) return NULL;
-        find = list_create(token_delete);
+        find = list_create(data_delete_token, data_copy_token);
         list_push_back(find, token_create_str("OMG"));
         list_push_back(find, token_create_str("OMGWTF"));
         list_push_back(find, token_create_str("OIC"));
@@ -1096,7 +1089,7 @@ evaluate_expr(struct parser *PARSER, struct state *STATE, struct list *BREAKS,
         state_save(STATE);
         if (value_get_troof(value) == WIN) {
             /* YA RLY */
-            find = list_create(token_delete);
+            find = list_create(data_delete_token, data_copy_token);
             list_push_back(find, token_create_str("YA"));
             list_push_back(find, token_create_str("OIC"));
             list_delete(parser_seek_list(PARSER, find));
@@ -1113,7 +1106,7 @@ evaluate_expr(struct parser *PARSER, struct state *STATE, struct list *BREAKS,
         }
         else {
             struct value *expr = NULL;
-            find = list_create(token_delete);
+            find = list_create(data_delete_token, data_copy_token);
             list_push_back(find, token_create_str("MEBBE"));
             list_push_back(find, token_create_str("NO"));
             list_push_back(find, token_create_str("OIC"));
@@ -1211,7 +1204,7 @@ evaluate_expr(struct parser *PARSER, struct state *STATE, struct list *BREAKS,
             return NULL;
         }
         /* Generate update */
-        update = list_create(token_delete);
+        update = list_create(data_delete_token, data_copy_token);
         list_push_back(update, token_create_str(var->data));
         list_push_back(update, token_create_str("R"));
         if (!strcmp(op->data, "UPPIN"))
@@ -1239,7 +1232,7 @@ evaluate_expr(struct parser *PARSER, struct state *STATE, struct list *BREAKS,
         else if (parser_cmp(PARSER, "WILE"))
             guard = parser_seek(PARSER, NULL);
         else if (parser_cmp(PARSER, NULL)) {
-            guard = list_create(token_delete);
+            guard = list_create(data_delete_token, data_copy_token);
             list_push_back(guard, token_create_str("WIN"));
             list_push_back(guard, token_create_null(0));
         }
@@ -1271,7 +1264,7 @@ evaluate_expr(struct parser *PARSER, struct state *STATE, struct list *BREAKS,
             }
             if (value_get_troof(result) == WIN) {
                 /* Evaluate loop body */
-                breaks = list_create(token_delete);
+                breaks = list_create(data_delete_token, data_copy_token);
                 list_push_front(breaks, token_create_str(""));
                 parser = parser_create_bind(PARSER->name, body);
                 assert(!evaluate_parser(parser, STATE, breaks, VERSION));
@@ -1319,7 +1312,7 @@ evaluate_expr(struct parser *PARSER, struct state *STATE, struct list *BREAKS,
             error(PARSER, "Expected `I' after `DUZ'");
             return NULL;
         }
-        args = list_create(token_delete);
+        args = list_create(data_delete_token, data_copy_token);
         name = parser_get(PARSER);
         while (parser_cmp(PARSER, "YR")) {
             struct token *arg = NULL;
@@ -1414,7 +1407,7 @@ evaluate_expr(struct parser *PARSER, struct state *STATE, struct list *BREAKS,
             struct list *body = NULL;
             struct funkshun *funkshun = value_get_funkshun(value);
             struct value *result = NULL;
-            void * head = NULL;
+            void *head = NULL;
             int status = 0;
             /* Retrieve all arguments */
             struct list *args = args_get(PARSER, STATE, BREAKS, VERSION, -1);
@@ -1438,27 +1431,17 @@ evaluate_expr(struct parser *PARSER, struct state *STATE, struct list *BREAKS,
                 while (list_head(funkshun->args) != head);
             }
             list_delete(args);
-
+            /* Set up state and breaks */
             state_write(STATE, "IT", value_create_noob());
-            breaks = list_create(token_delete);
+            breaks = list_create(data_delete_token, data_copy_token);
             list_push_front(breaks, token_create_str(""));
-
             /* Copy function body, to enable recursion */
-            body = list_create(token_delete);
-            head = list_head(funkshun->body);
-            do {
-                struct token *token = (struct token *)list_head(funkshun->body);
-                list_push_back(body, token_copy(token));
-                list_shift_down(funkshun->body);
-            }
-            while (list_head(funkshun->body) != head);
-
+            body = list_copy(funkshun->body);
             parser = parser_create_bind(PARSER->name, body);
             /* TODO: Don't allow functions to have access to outer block
              *       variables, only other functions */
             assert(!evaluate_parser(parser, STATE, breaks, VERSION));
             parser_delete(parser);
-
             result = value_copy(state_read(STATE, "IT"));
             state_restore(STATE);
 
@@ -1500,12 +1483,12 @@ main(int ARGC, char **ARGV)
         goto DONE;
     }
 
-    ignore = list_create(token_delete);
+    ignore = list_create(data_delete_token, data_copy_token);
     list_push_back(ignore, token_create_str(" "));
     list_push_back(ignore, token_create_str("\t"));
     list_push_back(ignore, token_create_str("...\n"));
 
-    keep = list_create(token_delete);
+    keep = list_create(data_delete_token, data_copy_token);
     list_push_back(keep, token_create_str("\n"));
     list_push_back(keep, token_create_str(","));
     list_push_back(keep, token_create_str("\r"));
@@ -1521,8 +1504,8 @@ main(int ARGC, char **ARGV)
         goto DONE;
     }
 
-    state = state_create(data_delete_value, 1);
-    breaks = list_create(token_delete);
+    state = state_create(data_delete_value, data_copy_value, 1);
+    breaks = list_create(data_delete_token, data_copy_token);
     /* Note that we will never break from main body */
     list_push_front(breaks, token_create_str("KTHXBYE"));
 

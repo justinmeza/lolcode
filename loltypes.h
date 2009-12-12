@@ -51,6 +51,7 @@ enum type {
     NUMBAR,
     YARN,
     FUNKSHUN,
+    BUKKIT,
 };
 
 enum troof {
@@ -73,10 +74,49 @@ struct value {
     enum type type;
 };
 
+/* Functions to delete values properly */
+
+    void
+value_delete(struct value *VALUE)
+{
+    assert(VALUE);
+    /* Need to free FUNKSHUNs specially */
+    if (VALUE->type == FUNKSHUN) {
+        struct funkshun *funkshun = NULL;
+        assert(VALUE->data);
+        funkshun = (struct funkshun *)VALUE->data;
+        assert(funkshun->args);
+        assert(funkshun->body);
+        free(funkshun->args);
+        free(funkshun->body);
+        free(VALUE->data);
+    }
+    /* Need to free BUKKITs specially */
+    else if (VALUE->type == BUKKIT) state_delete(VALUE->data);
+    else if (VALUE->data) free(VALUE->data);
+    free(VALUE);
+}
+
+    void
+data_delete_value(void *DATA)
+    /* Deletes pointers to values, used with state */
+{
+    value_delete(DATA);
+}
+
+struct value *value_copy(const struct value *);
+
+    void *
+data_copy_value(const void *DATA)
+    /* Copies pointers to values, used with state */
+{
+    return (void *)value_copy((const struct value *)DATA);
+}
+
 /* Functions for retrieving values */
 
     troof
-value_get_troof(struct value *VALUE)
+value_get_troof(const struct value *VALUE)
 {
     assert(VALUE);
     assert(VALUE->type == TROOF);
@@ -85,7 +125,7 @@ value_get_troof(struct value *VALUE)
 }
 
     numbr
-value_get_numbr(struct value *VALUE)
+value_get_numbr(const struct value *VALUE)
 {
     assert(VALUE);
     assert(VALUE->type == NUMBR);
@@ -94,7 +134,7 @@ value_get_numbr(struct value *VALUE)
 }
 
     numbar
-value_get_numbar(struct value *VALUE)
+value_get_numbar(const struct value *VALUE)
 {
     assert(VALUE);
     assert(VALUE->type == NUMBAR);
@@ -103,7 +143,7 @@ value_get_numbar(struct value *VALUE)
 }
 
     yarn
-value_get_yarn(struct value *VALUE)
+value_get_yarn(const struct value *VALUE)
 {
     assert(VALUE);
     assert(VALUE->type == YARN);
@@ -112,12 +152,21 @@ value_get_yarn(struct value *VALUE)
 }
 
     struct funkshun *
-value_get_funkshun(struct value *VALUE)
+value_get_funkshun(const struct value *VALUE)
 {
     assert(VALUE);
     assert(VALUE->type == FUNKSHUN);
     assert(VALUE->data);
     return ((struct funkshun *)(VALUE->data));
+}
+
+    struct state *
+value_get_bukkit(const struct value *VALUE)
+{
+    assert(VALUE);
+    assert(VALUE->type == BUKKIT);
+    assert(VALUE->data);
+    return ((struct state *)(VALUE->data));
 }
 
 /* Functions for creating values */
@@ -184,6 +233,15 @@ value_create_funkshun(struct list *ARGS, struct list *BODY)
     funkshun->args = ARGS;
     funkshun->body = BODY;
     value->data = funkshun;
+    return value;
+}
+
+    struct value *
+value_create_bukkit(void)
+{
+    struct value *value = malloc(sizeof(struct value));
+    value->type = BUKKIT;
+    value->data = state_create(data_delete_value, data_copy_value, 1);
     return value;
 }
 
@@ -438,59 +496,32 @@ value_cmp(struct value *LEFT, struct value *RIGHT)
 }
 
     struct value *
-value_copy(struct value *VALUE)
-    /* Returns a copy of the contents of VALUE */
+value_copy(const struct value *value)
+    /* returns a copy of the contents of value */
 {
-    assert(VALUE);
-    switch (VALUE->type) {
+    assert(value);
+    switch (value->type) {
         case NOOB:
             return value_create_noob();
         case TROOF:
-            return value_create_troof(value_get_troof(VALUE));
+            return value_create_troof(value_get_troof(value));
         case NUMBR:
-            return value_create_numbr(value_get_numbr(VALUE));
+            return value_create_numbr(value_get_numbr(value));
         case NUMBAR:
-            return value_create_numbar(value_get_numbar(VALUE));
+            return value_create_numbar(value_get_numbar(value));
         case YARN:
-            return value_create_yarn(value_get_yarn(VALUE));
+            return value_create_yarn(value_get_yarn(value));
         case FUNKSHUN: {
-            struct funkshun *funkshun = (struct funkshun *)VALUE->data;
-            struct list *args = list_create(token_delete);
-            struct list *body = list_create(token_delete);
-            void *head = list_head(funkshun->args);
-            do {
-                struct token *token = (struct token *)list_head(funkshun->args);
-                list_push_back(args, token_copy(token));
-                list_shift_down(funkshun->args);
-            }
-            while (list_head(funkshun->args) != head);
-            head = list_head(funkshun->body);
-            do {
-                struct token *token = (struct token *)list_head(funkshun->body);
-                list_push_back(body, token_copy(token));
-                list_shift_down(funkshun->body);
-            }
-            while (list_head(funkshun->body) != head);
-            return value_create_funkshun(args, body);
+            struct funkshun *funkshun = (struct funkshun *)value->data;
+            return value_create_funkshun(list_copy(funkshun->args),
+                    list_copy(funkshun->body));
         }
+        case BUKKIT: {
+            /* todo: handle this case */
+        }
+        default: assert(0);
     }
     return NULL;
-}
-
-    void
-value_delete(struct value *VALUE)
-{
-    assert(VALUE);
-    /* Need to free FUNKSHUNs specially */
-    if (VALUE->type == FUNKSHUN) {
-        struct funkshun *funkshun = (struct funkshun *)VALUE->data;
-        assert(funkshun->args);
-        assert(funkshun->body);
-        free(funkshun->args);
-        free(funkshun->body);
-    }
-    if (VALUE->data) free(VALUE->data);
-    free(VALUE);
 }
 
     unsigned int

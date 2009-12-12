@@ -233,13 +233,24 @@ token_create(const char *VALUE, unsigned int SIZE, unsigned int LINE,
 }
 
     void
-token_delete(void *TOKEN)
+token_delete(struct token *TOKEN)
     /* Properly deletes a token by freeing it as well as the value it holds */
 {
-    struct token *token = (struct token *)TOKEN;
     assert(TOKEN);
-    if (token->data) free(token->data);
+    if (TOKEN->data) free(TOKEN->data);
     free(TOKEN);
+}
+
+    void
+data_delete_token(void *DATA)
+{
+    token_delete((struct token *)DATA);
+}
+
+    void *
+data_copy_token(const void *DATA)
+{
+    return (void *)token_copy((const struct token *)DATA);
 }
 
 /* Functions for use with parsers */
@@ -286,7 +297,7 @@ parser_create_bind(const char *NAME, struct list *LIST)
     parser->line = 0;
     parser->column = 0;
     parser->buffer = 0;
-    parser->history = list_create(token_delete);
+    parser->history = list_create(data_delete_token, data_copy_token);
     parser->rules = NULL;
     return parser;
 }
@@ -305,13 +316,13 @@ parser_create(FILE *_FILE, const char *NAME, struct list *IGNORE, struct list *K
     parser->fd = _FILE;
     parser->name = malloc(sizeof(char) * (strlen(NAME) + 1));
     strcpy(parser->name, NAME);
-    parser->tokens = list_create(token_delete);
+    parser->tokens = list_create(data_delete_token, data_copy_token);
     parser->ignore = IGNORE;
     parser->keep = KEEP;
     parser->line = 0;
     parser->column = 0;
     parser->buffer = BUFFER;
-    parser->history = list_create(token_delete);
+    parser->history = list_create(data_delete_token, data_copy_token);
     parser->rules = RULES;
     return parser;
 }
@@ -514,7 +525,7 @@ parser_seek(struct parser *PARSER, const char *TOKEN)
     struct list *list = NULL;
     struct token *token = NULL;
     assert(PARSER);
-    list = list_create(token_delete);
+    list = list_create(data_delete_token, data_copy_token);
     do {
         token = parser_get(PARSER);
         /* TODO: Can both of the list_push_backs be moved here? (Maybe similar
@@ -539,7 +550,7 @@ parser_seek_list(struct parser *PARSER, struct list *LIST)
     struct token *token = NULL;
     assert(PARSER);
     assert(LIST);
-    list = list_create(token_delete);
+    list = list_create(data_delete_token, data_copy_token);
     do {
         void *head = NULL;
         token = parser_get(PARSER);
