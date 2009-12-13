@@ -281,7 +281,7 @@ value_cast_troof(struct value *VALUE)
         else data = WIN;
     }
     /* Invalid type */
-    else assert(0);
+    else return NULL;
     value = malloc(sizeof(struct value));
     value->type = TROOF;
     value->data = malloc(sizeof(enum troof));
@@ -323,7 +323,7 @@ value_cast_numbr(struct value *VALUE)
         if (neg) data *= -1;
     }
     /* Invalid type */
-    else assert(0);
+    else return NULL;
     value = malloc(sizeof(struct value));
     value->type = NUMBR;
     value->data = malloc(sizeof(numbr));
@@ -376,7 +376,7 @@ value_cast_numbar(struct value *VALUE)
         if (neg) data *= -1.0;
     }
     /* Invalid type */
-    else assert(0);
+    else return NULL;
     value = malloc(sizeof(struct value));
     value->type = NUMBAR;
     value->data = malloc(sizeof(numbar));
@@ -462,7 +462,7 @@ value_cast_yarn(struct value *VALUE)
         strcpy(data, value_get_yarn(VALUE));
     }
     /* Invalid type */
-    else assert(0);
+    else return NULL;
     value = malloc(sizeof(struct value));
     value->type = YARN;
     value->data = data;
@@ -497,7 +497,7 @@ value_cmp(struct value *LEFT, struct value *RIGHT)
 
     struct value *
 value_copy(const struct value *value)
-    /* returns a copy of the contents of value */
+    /* Returns a copy of the contents of value */
 {
     assert(value);
     switch (value->type) {
@@ -517,7 +517,10 @@ value_copy(const struct value *value)
                     list_copy(funkshun->body));
         }
         case BUKKIT: {
-            /* todo: handle this case */
+            struct value *bukkit = malloc(sizeof(struct value));
+            bukkit->type = BUKKIT;
+            bukkit->data = state_copy(value_get_bukkit(value));
+            return bukkit;
         }
         default: assert(0);
     }

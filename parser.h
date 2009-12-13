@@ -485,20 +485,37 @@ parser_cmp_at(struct parser *PARSER, unsigned int POS, const char *TOKEN)
     /* Seeks to an arbitrary position POS in the token stream and returns 1 if
      * the token value at that position is the same as STR and 0 if not. */
 {
+    /*
     struct item *item = NULL;
+    */
     struct token *token = NULL;
-    unsigned int n;
+    unsigned int n, i;
+    int result = 1;
     assert(PARSER);
+    /*
     if (list_size(PARSER->tokens) <= POS) return 0;
+    */
     /* Seek */
+    for (n = 0; n <= POS; n++) {
+        if (parser_empty(PARSER)) {
+            result = 0;
+            break;
+        }
+        token = parser_get(PARSER);
+    }
+    /*
     for (item = PARSER->tokens->head, n = 0;
             item != NULL && n < POS;
             n++, item = item->next) ;
     token = (struct token *)item->data;
+    */
     /* Check for null tokens and token string equality */
-    if ((!TOKEN && !token->null) || (TOKEN && strcmp(TOKEN, token->data)))
-        return 0;
-    return 1;
+    if (n > POS && ((!TOKEN && !token->null)
+            || (TOKEN && strcmp(TOKEN, token->data))))
+        result = 0;
+    /* Rewind */
+    for (i = 0; i <= n - 1; i++) parser_unget(PARSER);
+    return result;
 }
 
     int
