@@ -77,7 +77,7 @@ struct value {
 /* Functions to delete values properly */
 
     void
-value_delete(struct value *VALUE)
+value_delete_data(struct value *VALUE)
 {
     assert(VALUE);
     /* Need to free FUNKSHUNs specially */
@@ -94,7 +94,24 @@ value_delete(struct value *VALUE)
     /* Need to free BUKKITs specially */
     else if (VALUE->type == BUKKIT) state_delete(VALUE->data);
     else if (VALUE->data) free(VALUE->data);
+}
+
+    void
+value_delete(struct value *VALUE)
+{
+    value_delete_data(VALUE);
     free(VALUE);
+}
+
+    void
+value_replace(struct value *OLD, struct value *NEW)
+    /* Replaces the type and data of OLD with the type and data of NEW and free's
+     * NEW (without deleting it's data which now resides in OLD). */
+{
+    value_delete_data(OLD);
+    OLD->type = NEW->type;
+    OLD->data = NEW->data;
+    free(NEW);
 }
 
     void

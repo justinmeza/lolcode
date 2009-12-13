@@ -116,7 +116,7 @@ resolve_value(struct parser *PARSER, struct value *STATE)
     struct token *token = NULL;
     /* Keeps track of current state */
     struct state *state = value_get_bukkit(STATE);
-    struct value *value = STATE;       /* The value to return */
+    struct value *value = NULL;        /* The value to return */
     char *cur = NULL;                  /* Beginning of current part */
     unsigned short len = 0;            /* Length of current part */
     assert(PARSER);
@@ -125,23 +125,24 @@ resolve_value(struct parser *PARSER, struct value *STATE)
     /* If I, return global state */
     if (!strcmp(token->data, "I")) {
         token_delete(token);
-        return value;
+        return STATE;
     }
     cur = token->data;
     do {
         /* If we've found the end of an object name */
-        if (cur[len + 1] == '\0' || (cur[len] == '!'
+        /* TODO: It should be an error if '!' is not followed by '!' or '?' */
+        if (cur[len] == '\0' || (cur[len] == '!'
                 && (cur[len + 1] == '!' || cur[len + 1] == '?'))) {
             /* Save a copy of it */
             char *temp = malloc(sizeof(char) * (len + 1));
             strncpy(temp, cur, len);
             temp[len] = '\0';
             /* If direct access, read from current state */
-            if (cur == token->data || cur[len - 1] == '!')
+            if (cur == token->data || *(cur - 1) == '!')
                 value = state_read(state, temp);
             /* Else, if indirect access, read value from global state, cast it to
              * a YARN, and read that from current state. */
-            else if (cur[len - 1] == '?') {
+            else if (*(cur - 1) == '?') {
                 struct value *yarn = NULL;
                 value = state_read(value_get_bukkit(STATE), temp);
                 if (!value) {
@@ -159,14 +160,8 @@ resolve_value(struct parser *PARSER, struct value *STATE)
                 value = state_read(state, value_get_yarn(yarn));
                 value_delete(yarn);
             }
-            if (!value) {
-                error(PARSER, "Object does not exist");
-                free(temp);
-                token_delete(token);
-                return NULL;
-            }
             /* Last resolution need not be a BUKKIT */
-            else if (cur[len + 1] != '\0') {
+            if (cur[len] != '\0') {
                 if (value->type != BUKKIT) {
                     error(PARSER, "Expected BUKKIT");
                     free(temp);
@@ -181,8 +176,10 @@ resolve_value(struct parser *PARSER, struct value *STATE)
         }
         else len++;
     }
-    while (cur[len + 1] != '\0');
+    while (cur[len - 1] != '\0');
     token_delete(token);
+    /* If we could not resolve, put the token back */
+    if (!value) parser_unget(PARSER);
     return value;
 }
 
@@ -983,10 +980,10 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
 
     /* ... R */
     if (parser_cmp_at(PARSER, 1, "R")) {
-        struct token *token = parser_get(PARSER);
+        struct value *target = resolve_value(PARSER, STATE);
         struct value *value;
         /* Sanity check */
-        if (!token) {
+        if (!target) {
             error(PARSER, "Invalid assignment target");
             return NULL;
         }
@@ -1000,9 +997,8 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
             return NULL;
         }
         /* Write the variable value */
-        state_write(value_get_bukkit(STATE), token->data, value);
+        value_replace(target, value);
         /* Clean up and return a NOOB */
-        token_delete(token);
         return value_create_noob();
     }
 
@@ -1481,13 +1477,8 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
         return value;
     }
 
-    /* We must be left with value */
-    token = parser_get(PARSER);
-    if (!token) return NULL;
-
     /* STATE */
-    if (value = state_read(value_get_bukkit(STATE), token->data)) {
-        token_delete(token);
+    if (value = resolve_value(PARSER, STATE)) {
         if (value->type == NOOB) return value_cast_noob(value);
         if (value->type == TROOF) return value_cast_troof(value);
         if (value->type == NUMBR) return value_cast_numbr(value);
@@ -1542,7 +1533,14 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
             list_delete(breaks);
             return result;
         }
+        if (value->type == BUKKIT) {
+            /* TODO: Is there anything to do here? */
+        }
     }
+
+    /* We must be left with value */
+    token = parser_get(PARSER);
+    if (!token) return NULL;
 
     /* PRIMITIVE TYPES */
     if ((value = token_to_yarn(PARSER, STATE, token))
