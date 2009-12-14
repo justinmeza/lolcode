@@ -108,82 +108,6 @@ error(struct parser *PARSER, char *MESSAGE)
 }
 
     struct value *
-resolve_value(struct parser *PARSER, struct value *STATE)
-    /* Extracts the next token from PARSER and tokenizes it by splitting the
-     * it at ``!!'' and ``!?''.  It then performs the appropriate accesses to
-     * STATE to yield the valid target value, which it returns. */
-{
-    struct token *token = NULL;
-    /* Keeps track of current state */
-    struct state *state = value_get_bukkit(STATE);
-    struct value *value = NULL;        /* The value to return */
-    char *cur = NULL;                  /* Beginning of current part */
-    unsigned short len = 0;            /* Length of current part */
-    assert(PARSER);
-    assert(STATE);
-    token = parser_get(PARSER);
-    /* If I, return global state */
-    if (!strcmp(token->data, "I")) {
-        token_delete(token);
-        return STATE;
-    }
-    cur = token->data;
-    do {
-        /* If we've found the end of an object name */
-        /* TODO: It should be an error if '!' is not followed by '!' or '?' */
-        if (cur[len] == '\0' || (cur[len] == '!'
-                && (cur[len + 1] == '!' || cur[len + 1] == '?'))) {
-            /* Save a copy of it */
-            char *temp = malloc(sizeof(char) * (len + 1));
-            strncpy(temp, cur, len);
-            temp[len] = '\0';
-            /* If direct access, read from current state */
-            if (cur == token->data || *(cur - 1) == '!')
-                value = state_read(state, temp);
-            /* Else, if indirect access, read value from global state, cast it to
-             * a YARN, and read that from current state. */
-            else if (*(cur - 1) == '?') {
-                struct value *yarn = NULL;
-                value = state_read(value_get_bukkit(STATE), temp);
-                if (!value) {
-                    error(PARSER, "Indirect reference does not exist");
-                    free(temp);
-                    token_delete(token);
-                    return NULL;
-                }
-                else if (!(yarn = value_cast_yarn(value))) {
-                    error(PARSER, "Invalid indirect reference type");
-                    free(temp);
-                    token_delete(token);
-                    return NULL;
-                }
-                value = state_read(state, value_get_yarn(yarn));
-                value_delete(yarn);
-            }
-            /* Last resolution need not be a BUKKIT */
-            if (cur[len] != '\0') {
-                if (value->type != BUKKIT) {
-                    error(PARSER, "Expected BUKKIT");
-                    free(temp);
-                    token_delete(token);
-                    return NULL;
-                }
-                state = value_get_bukkit(value);
-            }
-            free(temp);
-            cur += (len + 2);
-            len = 0;
-        }
-        else len++;
-    }
-    while (cur[len - 1] != '\0');
-    token_delete(token);
-    /* If we could not resolve, put the token back */
-    if (!value) parser_unget(PARSER);
-    return value;
-}
-
-    struct value *
 token_to_troof(struct token *TOKEN)
     /* Casts TOKEN's value to a TROOF. On success, returns the new value and
      * frees the token, otherwise, returns NULL and the token remains
@@ -353,6 +277,108 @@ token_to_yarn(struct parser *PARSER, struct value *STATE, struct token *TOKEN)
     value = value_create_yarn(temp);
     free(temp);
     token_delete(TOKEN);
+    return value;
+}
+
+    struct value *
+resolve_value(struct parser *PARSER, struct value *STATE)
+    /* Extracts the next token from PARSER and tokenizes it by splitting the
+     * it at ``!!'' and ``!?''.  It then performs the appropriate accesses to
+     * STATE to yield the valid target value, which it returns. */
+{
+    struct token *token = NULL;
+    /* Keeps track of current state */
+    struct state *state = value_get_bukkit(STATE);
+    struct value *value = NULL;        /* The value to return */
+    char *cur = NULL;                  /* Beginning of current part */
+    unsigned short len = 0;            /* Length of current part */
+    assert(PARSER);
+    assert(STATE);
+    token = parser_get(PARSER);
+    /* If I, return global state */
+    if (!strcmp(token->data, "I")) {
+        token_delete(token);
+        return STATE;
+    }
+    cur = token->data;
+    while (1) {
+        /* If we've found the end of an object name */
+        /* TODO: It should be an error if '!' is not followed by '!' or '?' */
+        if (cur[len] == '\0' || (cur[len] == '!'
+                && (cur[len + 1] == '!' || cur[len + 1] == '?'))) {
+            /* Save a copy of it */
+            char *temp = malloc(sizeof(char) * (len + 1));
+            strncpy(temp, cur, len);
+            temp[len] = '\0';
+            /* If direct access, read from current state */
+            if (cur == token->data || *(cur - 1) == '!') {
+                value = state_read(state, temp);
+                /* Numerical indices are created on the fly */
+                if (cur != token->data && value == NULL) {
+                    struct token *token = token_create_str(temp);
+                    struct value *numbr = token_to_numbr(token);
+                    if (numbr) {
+                        value = value_create_noob();
+                        state_write(state, temp, value);
+                    }
+                    else token_delete(token);
+                }
+            }
+            /* Else, if indirect access, read value from global state, cast it to
+             * a YARN, and read that from current state. */
+            else if (*(cur - 1) == '?') {
+                struct value *yarn = NULL;
+                value = state_read(value_get_bukkit(STATE), temp);
+                if (!value) {
+                    error(PARSER, "Indirect reference does not exist");
+                    free(temp);
+                    token_delete(token);
+                    return NULL;
+                }
+                else if (!(yarn = value_cast_yarn(value))) {
+                    error(PARSER, "Invalid indirect reference type");
+                    free(temp);
+                    token_delete(token);
+                    return NULL;
+                }
+                value = state_read(state, value_get_yarn(yarn));
+                /* Numerical indices are created on the fly */
+                if (cur != token->data && value == NULL) {
+                    struct token *token = token_create_str(value_get_yarn(yarn));
+                    struct value *numbr = token_to_numbr(token);
+                    if (numbr) {
+                        value = value_create_noob();
+                        state_write(state, value_get_yarn(yarn), value);
+                    }
+                    else token_delete(token);
+                }
+                value_delete(yarn);
+            }
+            else {
+                error(PARSER, "Expected ``!'' or ``?'' after ``!''");
+                token_delete(token);
+                return NULL;
+            }
+            /* Last resolution need not be a BUKKIT */
+            if (cur[len] != '\0') {
+                if (value->type != BUKKIT) {
+                    error(PARSER, "Expected BUKKIT");
+                    free(temp);
+                    token_delete(token);
+                    return NULL;
+                }
+                state = value_get_bukkit(value);
+            }
+            free(temp);
+            if (cur[len] == '\0') break;
+            cur += (len + 2);
+            len = 0;
+        }
+        else len++;
+    }
+    token_delete(token);
+    /* If we could not resolve, put the token back */
+    if (!value) parser_unget(PARSER);
     return value;
 }
 
@@ -732,7 +758,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
             values = args_convert(args, types, 2);
             if (!values) {
                 error(PARSER, "Invalid argument to BOTH SAEM");
-                list_delete(values);
+                list_delete(args);
                 return NULL;
             }
             return func_foldl(values, func_bothsaem);
