@@ -749,18 +749,25 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
         else if (parser_cmp(PARSER, "SAEM")) {
             struct list *args = args_get(PARSER, STATE, BREAKS, 2);
             struct list *values = NULL;
+            void *head = NULL;
             int types[2] = { NUMBR, NUMBAR };
             if (list_size(args) != 2) {
                 error(PARSER,"Wrong number of arguments to BOTH SAEM");
                 list_delete(args);
                 return NULL;
             }
-            values = args_convert(args, types, 2);
-            if (!values) {
-                error(PARSER, "Invalid argument to BOTH SAEM");
-                list_delete(args);
-                return NULL;
+            head = list_head(args);
+            do {
+                struct value *value = (struct value *)list_head(args);
+                list_shift_down(args);
+                if (value->type != NUMBR && value->type != NUMBAR) break;
             }
+            while (head != list_head(args));
+            if (head != list_head(args)) {
+                list_delete(args);
+                return value_create_troof(FAIL);
+            }
+            values = args_convert(args, types, 2);
             return func_foldl(values, func_bothsaem);
         }
         else {
