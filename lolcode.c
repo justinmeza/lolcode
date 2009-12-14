@@ -1190,7 +1190,19 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
     /* GTFO */
     if (parser_cmp(PARSER, "GTFO")) {
         struct token *token = list_head(BREAKS);
-        list_delete(parser_seek(PARSER, token->data));
+        /* Disambiguate OICs by matching openings and closings */
+        if (!strcmp(token->data, "OIC")) {
+            int count = 0;
+            while (!parser_empty(PARSER)) {
+                if (parser_cmp(PARSER, "WTF?") || (parser_cmp(PARSER, "O")
+                        && parser_cmp(PARSER, "RLY?")))
+                    count++;
+                else if (parser_cmp(PARSER, "OIC")) count--;
+                else token_delete(parser_get(PARSER));
+                if (count < 0) break;
+            }
+        }
+        else list_delete(parser_seek(PARSER, token->data));
         list_pop_front(BREAKS);
         return value_create_noob();
     }
