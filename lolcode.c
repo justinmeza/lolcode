@@ -295,6 +295,11 @@ resolve_value(struct parser *PARSER, struct value *STATE)
     assert(PARSER);
     assert(STATE);
     token = parser_get(PARSER);
+    /* Don't try to interpret strings */
+    if (token->data[0] == '"') {
+        parser_unget(PARSER);
+        return NULL;
+    }
     /* If I, return global state */
     if (!strcmp(token->data, "I")) {
         token_delete(token);
