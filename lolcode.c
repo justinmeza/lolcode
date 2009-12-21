@@ -959,7 +959,25 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
                     error(PARSER, "Type expected");
                     return NULL;
                 }
-			}
+            }
+            /* Inheritance */
+            else if (parser_cmp(PARSER, "LIEK")) {
+                struct value *parent = NULL;
+                struct token *token = NULL;
+                if (!parser_cmp(PARSER, "A")) {
+                    error(PARSER, "Expected `A' after `ITZ LIEK'");
+                    return NULL;
+                }
+                token = parser_get(PARSER);
+                parent = token_to_value(PARSER, STATE, token);
+                if (!parent) {
+                    error(PARSER, "Invalid parent");
+                    token_delete(token);
+                    return NULL;
+                }
+                /* Should we keep track of parents, etc. ? */
+                value = value_copy(parent);
+            }
             else value = evaluate_expr(PARSER, STATE, BREAKS);
             if (!value) {
                 error(PARSER, "Expected expression after `ITZ'");
