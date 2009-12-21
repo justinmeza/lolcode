@@ -72,6 +72,7 @@ typedef enum troof troof;
 struct value {
     void *data;
     enum type type;
+    struct value *parent;
 };
 
 /* Functions to delete values properly */
@@ -111,6 +112,8 @@ value_replace(struct value *OLD, struct value *NEW)
     value_delete_data(OLD);
     OLD->type = NEW->type;
     OLD->data = NEW->data;
+    /* TODO: Is this sensible? */
+    OLD->parent = NEW->parent;
     free(NEW);
 }
 
@@ -194,6 +197,7 @@ value_create_noob(void)
     struct value *value = malloc(sizeof(struct value));
     value->type = NOOB;
     value->data = NULL;
+    value->parent = NULL;
     return value;
 }
 
@@ -204,6 +208,7 @@ value_create_troof(troof DATA)
     value->type = TROOF;
     value->data = malloc(sizeof(troof));
     *((troof *)(value->data)) = DATA;
+    value->parent = NULL;
     return value;
 }
 
@@ -214,6 +219,7 @@ value_create_numbr(numbr DATA)
     value->type = NUMBR;
     value->data = malloc(sizeof(numbr));
     *((numbr *)(value->data)) = DATA;
+    value->parent = NULL;
     return value;
 }
 
@@ -224,6 +230,7 @@ value_create_numbar(numbar DATA)
     value->type = NUMBAR;
     value->data = malloc(sizeof(numbar));
     *((numbar *)(value->data)) = DATA;
+    value->parent = NULL;
     return value;
 }
 
@@ -234,6 +241,7 @@ value_create_yarn(yarn DATA)
     value->type = YARN;
     value->data = malloc(sizeof(char) * (strlen(DATA) + 1));
     strcpy(value->data, DATA);
+    value->parent = NULL;
     return value;
 }
 
@@ -250,15 +258,17 @@ value_create_funkshun(struct list *ARGS, struct list *BODY)
     funkshun->args = ARGS;
     funkshun->body = BODY;
     value->data = funkshun;
+    value->parent = NULL;
     return value;
 }
 
     struct value *
-value_create_bukkit(void)
+value_create_bukkit(struct value *PARENT)
 {
     struct value *value = malloc(sizeof(struct value));
     value->type = BUKKIT;
     value->data = state_create(data_delete_value, data_copy_value, 1);
+    value->parent = PARENT;
     return value;
 }
 
@@ -513,30 +523,31 @@ value_cmp(struct value *LEFT, struct value *RIGHT)
 }
 
     struct value *
-value_copy(const struct value *value)
+value_copy(const struct value *VALUE)
     /* Returns a copy of the contents of value */
 {
-    assert(value);
-    switch (value->type) {
+    assert(VALUE);
+    switch (VALUE->type) {
         case NOOB:
             return value_create_noob();
         case TROOF:
-            return value_create_troof(value_get_troof(value));
+            return value_create_troof(value_get_troof(VALUE));
         case NUMBR:
-            return value_create_numbr(value_get_numbr(value));
+            return value_create_numbr(value_get_numbr(VALUE));
         case NUMBAR:
-            return value_create_numbar(value_get_numbar(value));
+            return value_create_numbar(value_get_numbar(VALUE));
         case YARN:
-            return value_create_yarn(value_get_yarn(value));
+            return value_create_yarn(value_get_yarn(VALUE));
         case FUNKSHUN: {
-            struct funkshun *funkshun = (struct funkshun *)value->data;
+            struct funkshun *funkshun = (struct funkshun *)VALUE->data;
             return value_create_funkshun(list_copy(funkshun->args),
                     list_copy(funkshun->body));
         }
         case BUKKIT: {
             struct value *bukkit = malloc(sizeof(struct value));
             bukkit->type = BUKKIT;
-            bukkit->data = state_copy(value_get_bukkit(value));
+            bukkit->data = state_copy(value_get_bukkit(VALUE));
+            bukkit->parent = VALUE->parent;
             return bukkit;
         }
         default: assert(0);

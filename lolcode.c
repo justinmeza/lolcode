@@ -281,7 +281,7 @@ token_to_yarn(struct parser *PARSER, struct value *STATE, struct token *TOKEN)
 }
 
     struct value *
-token_to_value(struct parser *PARSER, struct value *STATE, struct token *TOKEN)
+token_to_value(struct value *STATE, struct token *TOKEN)
     /* Performs a sequence of BUKKIT accesses, beginning at STATE, consisting of
      * repeatedly calling state_read with either a) tokens separated by ``!!''
      * or b) the YARN value of tokens separated by ``!?'' as key values to read
@@ -340,6 +340,81 @@ token_to_value(struct parser *PARSER, struct value *STATE, struct token *TOKEN)
     while (*end);
     token_delete(TOKEN);
     return value;
+}
+
+    struct value *
+value_lookup(struct value *STATE, struct token *TOKEN)
+{
+    assert(STATE);
+    assert(TOKEN);
+    do {
+        struct value *value = token_to_value(STATE, TOKEN);
+        if (value) return value;
+        STATE = STATE->parent;
+    }
+    while (STATE);
+    return NULL;
+}
+
+    struct value *
+scope_lookup(struct value *STATE, struct token *TOKEN)
+    /* Performs a sequence of BUKKIT accesses, beginning at STATE, consisting of
+     * repeatedly calling state_read with either a) tokens separated by ``!!''
+     * or b) the YARN value of tokens separated by ``!?'' as key values to read
+     * from.  Returns the scope of the last access. */
+{
+    struct value *value = STATE, *state = NULL;
+    char *start = NULL, *end = NULL;
+    assert(TOKEN);
+    assert(STATE);
+    start = TOKEN->data;
+    /* If ``I'', global state */
+    if (!strcmp(TOKEN->data, "I")) return value;
+    do {
+        char *middle = NULL, *key = NULL;
+        /* Find the next ``!'' */
+        end = strchr(start, '!');
+        /* If none found, seek to end */
+        if (!end) end = strchr(start, '\0');
+        /* Extract the middle portion */
+        middle = malloc(sizeof(char) * (end - start + 1));
+        strncpy(middle, start, end - start);
+        middle[end - start] = '\0';
+        /* If at start or ``!'', read from state */
+        if (start == TOKEN->data || *(start - 1) == '!') key = middle;
+        /* Else, if not at start and ``?'', read from STATE */
+        else if (start != TOKEN->data && *(start - 1) == '?') {
+            struct value *temp = value_cast_yarn(state_read(value_get_bukkit(STATE), middle));
+            if (!temp) return NULL;
+            free(middle);
+            key = malloc(sizeof(char) * (strlen(value_get_yarn(temp)) + 1));
+            strcpy(key, value_get_yarn(temp));
+            value_delete(temp);
+            start = end + 2;
+        }
+        else return NULL;
+        start = end + 2;
+        /* Resolve the next level */
+        value = state_read(value_get_bukkit(state = value), key);
+        if (!value) {
+            struct token *token = token_create_str(key);
+            struct value *numbr = token_to_numbr(token);
+            /* Create final NUMBR accesses on-the-fly */
+            if (start != TOKEN->data && !(*end) && numbr) {
+                state_write(value_get_bukkit(state), key,
+                    value = value_create_noob());
+                value_delete(numbr);
+            }
+            else {
+                if (numbr) value_delete(numbr);
+                else token_delete(token);
+                return NULL;
+            }
+        }
+        free(key);
+    }
+    while (*end);
+    return state;
 }
 
 struct value *evaluate_expr(struct parser *, struct value *, struct list *);
@@ -475,8 +550,9 @@ evaluate_parser(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
 evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
     /* Evaluates the next valid expression present in PARSER's token stream */
 {
-    struct token *token;
-    struct value *value;
+    struct token *token = NULL;
+    struct value *value = NULL;
+    struct value *scope = NULL;
     assert(PARSER);
     assert(STATE);
     assert(BREAKS);
@@ -910,7 +986,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
     /* ... HAS A ... ITZ A */
     if (parser_cmp_at(PARSER, 1, "HAS")) {
         struct token *token = parser_get(PARSER);
-        struct value *target = token_to_value(PARSER, STATE, token);
+        struct value *target = value_lookup(STATE, token);
         struct value *value = NULL;
         if (!target) {
             error(PARSER, "Invalid assignment target");
@@ -954,7 +1030,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
                 else if (parser_cmp(PARSER, "YARN"))
                     value = value_create_yarn("");
                 else if (parser_cmp(PARSER, "BUKKIT"))
-                    value = value_create_bukkit();
+                    value = value_create_bukkit(target);
                 else {
                     error(PARSER, "Type expected");
                     return NULL;
@@ -969,7 +1045,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
                     return NULL;
                 }
                 token = parser_get(PARSER);
-                parent = token_to_value(PARSER, STATE, token);
+                parent = value_lookup(STATE, token);
                 if (!parent) {
                     error(PARSER, "Invalid parent");
                     token_delete(token);
@@ -995,7 +1071,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
     /* ... R ... */
     if (parser_cmp_at(PARSER, 1, "R")) {
         struct token *token = parser_get(PARSER);
-        struct value *target = token_to_value(PARSER, STATE, token);
+        struct value *target = token_to_value(STATE, token);
         struct value *value = NULL;
         /* Sanity check */
         if (!target) {
@@ -1413,22 +1489,29 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
         return value_create_noob();
     }
 
-    /* HOW DUZ I ..., IF U SAY SO */
+    /* HOW DUZ ..., IF U SAY SO */
     if (parser_cmp(PARSER, "HOW")) {
-        struct token *name = NULL;
+        struct token *token = NULL;
         struct item *head = NULL;
-        struct list *args = NULL;
-        struct list *body = NULL;
+        struct list *args = NULL, *body = NULL;
+        struct value *object = NULL;
         if (!parser_cmp(PARSER, "DUZ")) {
             error(PARSER, "Expected `DUZ' after `HOW'");
             return NULL;
         }
-        if (!parser_cmp(PARSER, "I")) {
-            error(PARSER, "Expected `I' after `DUZ'");
+        token = parser_get(PARSER);
+        object = token_to_value(STATE, token);
+        if (!object) {
+            error(PARSER, "Expected variable after `HOW DUZ'");
+            token_delete(token);
+            return NULL;
+        }
+        if (object->type != BUKKIT) {
+            error(PARSER, "Expected object after `HOW DUZ'");
             return NULL;
         }
         args = list_create(data_delete_token, data_copy_token);
-        name = parser_get(PARSER);
+        token = parser_get(PARSER);
         while (parser_cmp(PARSER, "YR")) {
             struct token *arg = NULL;
             void *head = NULL;
@@ -1462,7 +1545,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
                 return NULL;
             }
         }
-        /* Save function in STATE */
+        /* Save function in object */
         body = parser_seek(PARSER, "IF");
         list_pop_front(body);
         list_pop_back(body);
@@ -1481,8 +1564,9 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
             list_delete(args);
             return NULL;
         }
-        state_write(value_get_bukkit(STATE), name->data, value_create_funkshun(args, body));
-        token_delete(name);
+        state_write(value_get_bukkit(object), token->data,
+                value_create_funkshun(args, body));
+        token_delete(token);
         return value_create_noob();
     }
 
@@ -1512,11 +1596,12 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
     if ((value = token_to_yarn(PARSER, STATE, token))
             || (value = token_to_numbr(token))
             || (value = token_to_numbar(token))
-            || (value = token_to_troof(token)))
+            || (value = token_to_troof(token))) 
         return value;
 
     /* STATE */
-    if (value = token_to_value(PARSER, STATE, token)) {
+    if (!(scope = scope_lookup(STATE, token))) scope = STATE;
+    if (value = value_lookup(STATE, token)) {
         if (value->type == NOOB) return value_cast_noob(value);
         if (value->type == TROOF) return value_cast_troof(value);
         if (value->type == NUMBR) return value_cast_numbr(value);
@@ -1527,7 +1612,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
             struct list *breaks = NULL;
             struct list *body = NULL;
             struct funkshun *funkshun = value_get_funkshun(value);
-            struct value *result = NULL;
+            struct value *result = NULL, *local = NULL;
             void *head = NULL;
             int status = 0;
             /* Retrieve all arguments */
@@ -1539,13 +1624,13 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
                 return NULL;
             }
 
-            /* Populate variables with arguments */
-            state_save(value_get_bukkit(STATE));
+            /* Populate local scope with arguments */
+            local = value_create_bukkit(scope);
             if (list_size(funkshun->args) > 0) {
                 head = list_head(funkshun->args);
                 do {
                     struct token *arg = (struct token *)list_head(funkshun->args);
-                    state_write(value_get_bukkit(STATE), arg->data,
+                    state_write(value_get_bukkit(local), arg->data,
                             value_copy((struct value *)list_head(args)));
                     list_pop_front(args);
                     list_shift_down(funkshun->args);
@@ -1554,18 +1639,22 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
             }
             list_delete(args);
             /* Set up state and breaks */
-            state_write(value_get_bukkit(STATE), "IT", value_create_noob());
+            state_write(value_get_bukkit(local), "IT", value_create_noob());
             breaks = list_create(data_delete_token, data_copy_token);
             list_push_front(breaks, token_create_str(""));
             /* Copy function body, to enable recursion */
             body = list_copy(funkshun->body);
             parser = parser_create_bind(PARSER->name, body);
-            /* TODO: Don't allow functions to have access to outer block
-             *       variables, only other functions */
-            assert(!evaluate_parser(parser, STATE, breaks));
+            if (evaluate_parser(parser, local, breaks)) {
+                parser_delete(parser);
+                value_delete(local);
+                list_delete(body);
+                list_delete(breaks);
+                return NULL;
+            }
             parser_delete(parser);
-            result = value_copy(state_read(value_get_bukkit(STATE), "IT"));
-            state_restore(value_get_bukkit(STATE));
+            result = value_copy(state_read(value_get_bukkit(local), "IT"));
+            value_delete(local);
 
             list_delete(body);
             list_delete(breaks);
@@ -1622,7 +1711,7 @@ main(int ARGC, char **ARGV)
         goto DONE;
     }
 
-    state = value_create_bukkit();
+    state = value_create_bukkit(NULL);
     breaks = list_create(data_delete_token, data_copy_token);
     /* Note that we will never break from main body */
     list_push_front(breaks, token_create_str("KTHXBYE"));
