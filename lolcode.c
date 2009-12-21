@@ -281,109 +281,64 @@ token_to_yarn(struct parser *PARSER, struct value *STATE, struct token *TOKEN)
 }
 
     struct value *
-resolve_value(struct parser *PARSER, struct value *STATE)
-    /* Extracts the next token from PARSER and tokenizes it by splitting the
-     * it at ``!!'' and ``!?''.  It then performs the appropriate accesses to
-     * STATE to yield the valid target value, which it returns. */
+token_to_value(struct parser *PARSER, struct value *STATE, struct token *TOKEN)
+    /* Performs a sequence of BUKKIT accesses, beginning at STATE, consisting of
+     * repeatedly calling state_read with either a) tokens separated by ``!!''
+     * or b) the YARN value of tokens separated by ``!?'' as key values to read
+     * from.  Returns the value of the last access. */
 {
-    struct token *token = NULL;
-    /* Keeps track of current state */
-    struct state *state = value_get_bukkit(STATE);
-    struct value *value = NULL;        /* The value to return */
-    char *cur = NULL;                  /* Beginning of current part */
-    unsigned short len = 0;            /* Length of current part */
-    assert(PARSER);
+    struct value *value = STATE, *state = NULL;
+    char *start = NULL, *end = NULL;
+    assert(TOKEN);
     assert(STATE);
-    token = parser_get(PARSER);
-    /* Don't try to interpret strings */
-    if (token->data[0] == '"') {
-        parser_unget(PARSER);
-        return NULL;
-    }
-    /* If I, return global state */
-    if (!strcmp(token->data, "I")) {
-        token_delete(token);
-        return STATE;
-    }
-    cur = token->data;
-    while (1) {
-        /* If we've found the end of an object name */
-        /* TODO: It should be an error if '!' is not followed by '!' or '?' */
-        if (cur[len] == '\0' || (cur[len] == '!'
-                && (cur[len + 1] == '!' || cur[len + 1] == '?'))) {
-            /* Save a copy of it */
-            char *temp = malloc(sizeof(char) * (len + 1));
-            strncpy(temp, cur, len);
-            temp[len] = '\0';
-            /* If direct access, read from current state */
-            if (cur == token->data || *(cur - 1) == '!') {
-                value = state_read(state, temp);
-                /* Numerical indices are created on the fly */
-                if (cur != token->data && value == NULL) {
-                    struct token *token = token_create_str(temp);
-                    struct value *numbr = token_to_numbr(token);
-                    if (numbr) {
-                        value = value_create_noob();
-                        state_write(state, temp, value);
-                    }
-                    else token_delete(token);
-                }
-            }
-            /* Else, if indirect access, read value from global state, cast it to
-             * a YARN, and read that from current state. */
-            else if (*(cur - 1) == '?') {
-                struct value *yarn = NULL;
-                value = state_read(value_get_bukkit(STATE), temp);
-                if (!value) {
-                    error(PARSER, "Indirect reference does not exist");
-                    free(temp);
-                    token_delete(token);
-                    return NULL;
-                }
-                else if (!(yarn = value_cast_yarn(value))) {
-                    error(PARSER, "Invalid indirect reference type");
-                    free(temp);
-                    token_delete(token);
-                    return NULL;
-                }
-                value = state_read(state, value_get_yarn(yarn));
-                /* Numerical indices are created on the fly */
-                if (cur != token->data && value == NULL) {
-                    struct token *token = token_create_str(value_get_yarn(yarn));
-                    struct value *numbr = token_to_numbr(token);
-                    if (numbr) {
-                        value = value_create_noob();
-                        state_write(state, value_get_yarn(yarn), value);
-                    }
-                    else token_delete(token);
-                }
-                value_delete(yarn);
+    start = TOKEN->data;
+    /* If ``I'', return global state */
+    if (!strcmp(TOKEN->data, "I")) return value;
+    do {
+        char *middle = NULL, *key = NULL;
+        /* Find the next ``!'' */
+        end = strchr(start, '!');
+        /* If none found, seek to end */
+        if (!end) end = strchr(start, '\0');
+        /* Extract the middle portion */
+        middle = malloc(sizeof(char) * (end - start + 1));
+        strncpy(middle, start, end - start);
+        middle[end - start] = '\0';
+        /* If at start or ``!'', read from state */
+        if (start == TOKEN->data || *(start - 1) == '!') key = middle;
+        /* Else, if not at start and ``?'', read from STATE */
+        else if (start != TOKEN->data && *(start - 1) == '?') {
+            struct value *temp = value_cast_yarn(state_read(value_get_bukkit(STATE), middle));
+            if (!temp) return NULL;
+            free(middle);
+            key = malloc(sizeof(char) * (strlen(value_get_yarn(temp)) + 1));
+            strcpy(key, value_get_yarn(temp));
+            value_delete(temp);
+            start = end + 2;
+        }
+        else return NULL;
+        start = end + 2;
+        /* Resolve the next level */
+        value = state_read(value_get_bukkit(state = value), key);
+        if (!value) {
+            struct token *token = token_create_str(key);
+            struct value *numbr = token_to_numbr(token);
+            /* Create final NUMBR accesses on-the-fly */
+            if (start != TOKEN->data && !(*end) && numbr) {
+                state_write(value_get_bukkit(state), key,
+                    value = value_create_noob());
+                value_delete(numbr);
             }
             else {
-                error(PARSER, "Expected ``!'' or ``?'' after ``!''");
-                token_delete(token);
+                if (numbr) value_delete(numbr);
+                else token_delete(token);
                 return NULL;
             }
-            /* Last resolution need not be a BUKKIT */
-            if (cur[len] != '\0') {
-                if (value->type != BUKKIT) {
-                    error(PARSER, "Expected BUKKIT");
-                    free(temp);
-                    token_delete(token);
-                    return NULL;
-                }
-                state = value_get_bukkit(value);
-            }
-            free(temp);
-            if (cur[len] == '\0') break;
-            cur += (len + 2);
-            len = 0;
         }
-        else len++;
+        free(key);
     }
-    token_delete(token);
-    /* If we could not resolve, put the token back */
-    if (!value) parser_unget(PARSER);
+    while (*end);
+    token_delete(TOKEN);
     return value;
 }
 
@@ -954,10 +909,16 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
 
     /* ... HAS A ... ITZ A */
     if (parser_cmp_at(PARSER, 1, "HAS")) {
-        struct value *state = resolve_value(PARSER, STATE);
-        struct token *token = NULL;
-        if (!state || state->type != BUKKIT) {
-            error(PARSER, "Expected BUKKIT");
+        struct token *token = parser_get(PARSER);
+        struct value *target = token_to_value(PARSER, STATE, token);
+        struct value *value = NULL;
+        if (!target) {
+            error(PARSER, "Invalid assignment target");
+            token_delete(token);
+            return NULL;
+        }
+        if (target->type != BUKKIT) {
+            error(PARSER, "Invalid assignment target type");
             return NULL;
         }
         if (!parser_cmp(PARSER, "HAS")) {
@@ -974,15 +935,14 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
             error(PARSER, "Variable name expected");
             return NULL;
         }
-        if (state_find(value_get_bukkit(STATE), token->data, 0)) {
+        if (state_find(value_get_bukkit(target), token->data, 0)) {
             error(PARSER, "Variable previously declared");
             return NULL;
         }
         /* Check for initialization */
         if (parser_cmp(PARSER, "ITZ")) {
-            struct value *value =  NULL;
-			/* Check for empty initialization */
-			if (parser_cmp(PARSER, "A")) {
+            /* Check for empty initialization */
+            if (parser_cmp(PARSER, "A")) {
                 if (parser_cmp(PARSER, "NOOB"))
                     value = value_create_noob();
                 else if (parser_cmp(PARSER, "TROOF"))
@@ -1003,26 +963,26 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
             else value = evaluate_expr(PARSER, STATE, BREAKS);
             if (!value) {
                 error(PARSER, "Expected expression after `ITZ'");
-                value_delete(value);
                 token_delete(token);
                 return NULL;
             }
-            state_insert(value_get_bukkit(state), token->data, value);
         }
         /* Otherwise create a NOOB type variable */
-        else state_write(value_get_bukkit(state), token->data,
-                value_create_noob());
+        else value = value_create_noob();
+        state_write(value_get_bukkit(target), token->data, value);
         token_delete(token);
         return value_create_noob();
     }
 
-    /* ... R */
+    /* ... R ... */
     if (parser_cmp_at(PARSER, 1, "R")) {
-        struct value *target = resolve_value(PARSER, STATE);
-        struct value *value;
+        struct token *token = parser_get(PARSER);
+        struct value *target = token_to_value(PARSER, STATE, token);
+        struct value *value = NULL;
         /* Sanity check */
         if (!target) {
             error(PARSER, "Invalid assignment target");
+            token_delete(token);
             return NULL;
         }
         /* Remove the R from the token stream */
@@ -1031,7 +991,6 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
         value = evaluate_expr(PARSER, STATE, BREAKS);
         if (!value) {
             error(PARSER, "Invalid assignment expression");
-            token_delete(token);
             return NULL;
         }
         /* Write the variable value */
@@ -1527,8 +1486,19 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
         return value;
     }
 
+    /* We must be left with a value */
+    token = parser_get(PARSER);
+    if (!token) return NULL;
+
+    /* PRIMITIVE TYPES */
+    if ((value = token_to_yarn(PARSER, STATE, token))
+            || (value = token_to_numbr(token))
+            || (value = token_to_numbar(token))
+            || (value = token_to_troof(token)))
+        return value;
+
     /* STATE */
-    if (value = resolve_value(PARSER, STATE)) {
+    if (value = token_to_value(PARSER, STATE, token)) {
         if (value->type == NOOB) return value_cast_noob(value);
         if (value->type == TROOF) return value_cast_troof(value);
         if (value->type == NUMBR) return value_cast_numbr(value);
@@ -1585,19 +1555,9 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
         }
         if (value->type == BUKKIT) {
             /* TODO: Is there anything to do here? */
+            assert(0);
         }
     }
-
-    /* We must be left with value */
-    token = parser_get(PARSER);
-    if (!token) return NULL;
-
-    /* PRIMITIVE TYPES */
-    if ((value = token_to_yarn(PARSER, STATE, token))
-            || (value = token_to_numbr(token))
-            || (value = token_to_numbar(token))
-            || (value = token_to_troof(token)))
-        return value;
 
     /* UNABLE TO EVALUATE */
     parser_unget(PARSER);
