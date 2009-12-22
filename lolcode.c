@@ -13,7 +13,7 @@
  *
  * LICENSE
  *
- *      Copyright (c) 2007 Justin J. Meza
+ *      Copyright (c) 2007-2010 Justin J. Meza
  *
  *      Permission is hereby granted, free of charge, to any person obtaining a
  *      copy of this software and associated documentation files (the
@@ -66,6 +66,16 @@ data_delete_list(void *DATA)
 {
     list_delete(DATA);
 }
+
+    void
+data_delete_null(void *DATA)
+    /* Does not delete anything */
+{ }
+
+    void *
+data_copy_null(const void *DATA)
+    /* Does not copy anything */
+{ }
 
     int
 parser_rules(char *BUF, size_t LEN, unsigned int *START, unsigned int *POS)
@@ -308,7 +318,11 @@ token_to_value(struct value *STATE, struct token *TOKEN)
         if (start == TOKEN->data || *(start - 1) == '!') key = middle;
         /* Else, if not at start and ``?'', read from STATE */
         else if (start != TOKEN->data && *(start - 1) == '?') {
-            struct value *temp = value_cast_yarn(state_read(value_get_bukkit(STATE), middle));
+            struct value *read = NULL;
+            struct value *temp = NULL;
+            read = state_read(value_get_bukkit(STATE), middle);
+            if (!read) return NULL;
+            temp = value_cast_yarn(read);
             if (!temp) return NULL;
             free(middle);
             key = malloc(sizeof(char) * (strlen(value_get_yarn(temp)) + 1));
@@ -343,16 +357,53 @@ token_to_value(struct value *STATE, struct token *TOKEN)
 }
 
     struct value *
-value_lookup(struct value *STATE, struct token *TOKEN)
+value_lookup(struct value *STATE, struct list *GRANTS, struct token *TOKEN, 
+        enum access *ACCESS)
+    /* Looks up the value corresponding to TOKEN in STATE, searching through
+     * parent scopes if required until the root scope is reached whereupon
+     * NULL is returned if the value does not exist.  If the value is found
+     * in the current scope (STATE) or a pointer to the value is on the GRANT
+     * list, ACCESS is set to FULL, otherwise ACCESS is set to READ.
+     *
+     * +========+===========+=========+
+     * | SCOPE  | IN GRANT? | *ACCESS |
+     * +========+===========+=========+
+     * |        |    YES    |  FULL   |
+     * | STATE  +-----------+---------+
+     * |        |    NO     |  FULL   |
+     * +========+-----------+---------+
+     * |        |    YES    |  FULL   |
+     * | PARENT +-----------+---------+
+     * |        |    NO     |  READ   |
+     * +========+-----------+---------+
+     */
 {
+    struct value *scope = STATE;
     assert(STATE);
     assert(TOKEN);
+    *ACCESS = READ | WRITE;            /* Read or write access by default */
     do {
-        struct value *value = token_to_value(STATE, TOKEN);
-        if (value) return value;
-        STATE = STATE->parent;
+        struct value *value = token_to_value(scope, TOKEN);
+        if (value) {
+            /* If not in the current state, return it if in access list */
+            if (scope != STATE) {
+                if (GRANTS && !list_empty(GRANTS)) {
+                    void *head = list_head(GRANTS);
+                    do {
+                        struct value *item = (struct value *)list_head(GRANTS);
+                        if (item == value) return value;
+                        list_shift_down(GRANTS);
+                    }
+                    while (list_head(GRANTS) != head);
+                }
+                /* Otherwise, give it read-only access */
+                *ACCESS = READ;
+            }
+            return value;
+        }
+        scope = scope->parent;
     }
-    while (STATE);
+    while (scope);
     return NULL;
 }
 
@@ -384,7 +435,11 @@ scope_lookup(struct value *STATE, struct token *TOKEN)
         if (start == TOKEN->data || *(start - 1) == '!') key = middle;
         /* Else, if not at start and ``?'', read from STATE */
         else if (start != TOKEN->data && *(start - 1) == '?') {
-            struct value *temp = value_cast_yarn(state_read(value_get_bukkit(STATE), middle));
+            struct value *read = NULL;
+            struct value *temp = NULL;
+            read = state_read(value_get_bukkit(STATE), middle);
+            if (!read) return NULL;
+            temp = value_cast_yarn(read);
             if (!temp) return NULL;
             free(middle);
             key = malloc(sizeof(char) * (strlen(value_get_yarn(temp)) + 1));
@@ -417,11 +472,12 @@ scope_lookup(struct value *STATE, struct token *TOKEN)
     return state;
 }
 
-struct value *evaluate_expr(struct parser *, struct value *, struct list *);
+struct value *evaluate_expr(struct parser *, struct value *, struct list *,
+        struct list *);
 
     struct list *
 args_get(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
-        int NUM)
+        struct list *GRANTS, int NUM)
     /* Removes NUM arguments from parsers token stream, optionally seperated by
      * ANs. NUM < 0 retrieves as many arguments as possible.  Caller code
      * should check to make sure the number of arguments actually returned
@@ -435,7 +491,7 @@ args_get(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
     assert(BREAKS);
     args = list_create(data_delete_value, data_copy_value);
     while (NUM--) {
-        if ((arg = evaluate_expr(PARSER, STATE, BREAKS)) == NULL) break;
+        if ((arg = evaluate_expr(PARSER, STATE, BREAKS, GRANTS)) == NULL) break;
         list_push_back(args, arg);
         if (NUM) parser_cmp(PARSER, "AN");
     }
@@ -510,7 +566,8 @@ args_convert(struct list *LIST, int *TYPES, unsigned int SIZE)
 }
 
     int
-evaluate_parser(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
+evaluate_parser(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
+        struct list *GRANTS)
     /* Evaluates all of the remaining tokens in PARSER and returns the result
      * of the last evaluated expression. The arguments which are used for the
      * state of the program are not modified but are visible to the evaluated
@@ -528,7 +585,7 @@ evaluate_parser(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
             /* KTHXBYE */
             if (parser_cmp(PARSER, "KTHXBYE")) return 0;
             /* Evaluate parser expressions */
-            else if (!(value = evaluate_expr(PARSER, STATE, BREAKS)))
+            else if (!(value = evaluate_expr(PARSER, STATE, BREAKS, GRANTS)))
                 return 1;
         }
         /* Update IT */
@@ -547,9 +604,11 @@ evaluate_parser(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
 }
 
     struct value *
-evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
+evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
+        struct list *GRANTS)
     /* Evaluates the next valid expression present in PARSER's token stream */
 {
+    enum access access;
     struct token *token = NULL;
     struct value *value = NULL;
     struct value *scope = NULL;
@@ -560,7 +619,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
     /* VISIBLE */
     if (parser_cmp(PARSER, "VISIBLE")) {
         /* Retrieve all arguments */
-        struct list *args = args_get(PARSER, STATE, BREAKS, -1);
+        struct list *args = args_get(PARSER, STATE, BREAKS, GRANTS, -1);
         /* Check for at least one argument */
         if (list_size(args) == 0) {
             error(PARSER, "No arguments supplied to VISIBLE");
@@ -601,7 +660,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
             return NULL;
         }
         /* Retrieve all arguments */
-        args = args_get(PARSER, STATE, BREAKS, 2);
+        args = args_get(PARSER, STATE, BREAKS, GRANTS, 2);
         /* Check for correct number of arguments */
         if (list_size(args) != 2) {
             error(PARSER, "Wrong number of arguments to SUM OF");
@@ -628,7 +687,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
             error(PARSER, "Expected `OF' after `DIFF'");
             return NULL;
         }
-        args = args_get(PARSER, STATE, BREAKS, 2);
+        args = args_get(PARSER, STATE, BREAKS, GRANTS, 2);
         if (list_size(args) != 2) {
             error(PARSER, "Wrong number of arguments to DIFF OF");
             list_delete(args);
@@ -652,7 +711,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
             error(PARSER, "Expected `OF' after `PRODUKT'");
             return NULL;
         }
-        args = args_get(PARSER, STATE, BREAKS, 2);
+        args = args_get(PARSER, STATE, BREAKS, GRANTS, 2);
         if (list_size(args) != 2) {
             error(PARSER, "Wrong number of arguments to PRODUKT OF");
             list_delete(args);
@@ -676,7 +735,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
             error(PARSER, "Expected `OF' after `QHUSHUNT'");
             return NULL;
         }
-        args = args_get(PARSER, STATE, BREAKS, 2);
+        args = args_get(PARSER, STATE, BREAKS, GRANTS, 2);
         if (list_size(args) != 2) {
             error(PARSER, "Wrong number of arguments to QUOSHUNT OF");
             list_delete(args);
@@ -700,7 +759,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
             error(PARSER, "Expected `OF' after `MOD'");
             return NULL;
         }
-        args = args_get(PARSER, STATE, BREAKS, 2);
+        args = args_get(PARSER, STATE, BREAKS, GRANTS, 2);
         if (list_size(args) != 2) {
             error(PARSER, "Wrong number of arguments to MOD OF");
             list_delete(args);
@@ -724,7 +783,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
             error(PARSER, "Expected `OF' after `BIGGR'");
             return NULL;
         }
-        args = args_get(PARSER, STATE, BREAKS, 2);
+        args = args_get(PARSER, STATE, BREAKS, GRANTS, 2);
         if (list_size(args) != 2) {
             error(PARSER, "Wrong number of arguments to BIGGR OF");
             list_delete(args);
@@ -748,7 +807,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
             error(PARSER, "Expected `OF' after `BIGGR'");
             return NULL;
         }
-        args = args_get(PARSER, STATE, BREAKS, 2);
+        args = args_get(PARSER, STATE, BREAKS, GRANTS, 2);
         if (list_size(args) != 2) {
             error(PARSER, "Wrong number of arguments to SMALLR OF");
             list_delete(args);
@@ -766,7 +825,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
     /* BOTH OF, BOTH SAEM */
     if (parser_cmp(PARSER, "BOTH")) {
         if (parser_cmp(PARSER, "OF")) {
-            struct list *args = args_get(PARSER, STATE, BREAKS, 2);
+            struct list *args = args_get(PARSER, STATE, BREAKS, GRANTS, 2);
             struct list *values = NULL;
             int types[1] = { TROOF };
             if (list_size(args) != 2) {
@@ -783,7 +842,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
             return func_foldl(values, func_bothof);
         }
         else if (parser_cmp(PARSER, "SAEM")) {
-            struct list *args = args_get(PARSER, STATE, BREAKS, 2);
+            struct list *args = args_get(PARSER, STATE, BREAKS, GRANTS, 2);
             struct list *values = NULL;
             void *head = NULL;
             int types[2] = { NUMBR, NUMBAR };
@@ -821,7 +880,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
             error(PARSER, "Expected `OF' after `EITHER'");
             return NULL;
         }
-        args = args_get(PARSER, STATE, BREAKS, 2);
+        args = args_get(PARSER, STATE, BREAKS, GRANTS, 2);
         if (list_size(args) != 2) {
             error(PARSER, "Wrong number of arguments to EITHER OF");
             list_delete(args);
@@ -845,7 +904,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
             error(PARSER, "Expected `OF' after `WON'");
             return NULL;
         }
-        args = args_get(PARSER, STATE, BREAKS, 2);
+        args = args_get(PARSER, STATE, BREAKS, GRANTS, 2);
         if (list_size(args) != 2) {
             error(PARSER, "Wrong number of arguments to WON OF");
             list_delete(args);
@@ -863,7 +922,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
     /* NOT */
     if (parser_cmp(PARSER, "NOT")) {
         /* Retrieve one argument */
-        struct list *args = args_get(PARSER, STATE, BREAKS, 1);
+        struct list *args = args_get(PARSER, STATE, BREAKS, GRANTS, 1);
         struct list *values = NULL;
         struct value *value = NULL;
         struct value *result = NULL;
@@ -897,7 +956,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
             error(PARSER, "Expected `OF' after `ALL'");
             return NULL;
         }
-        args = args_get(PARSER, STATE, BREAKS, -1);
+        args = args_get(PARSER, STATE, BREAKS, GRANTS, -1);
         if (list_size(args) == 0) {
             error(PARSER, "No arguments supplied to ALL OF");
             list_delete(args);
@@ -925,7 +984,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
             error(PARSER, "Expected `OF' after `ANY'");
             return NULL;
         }
-        args = args_get(PARSER, STATE, BREAKS, -1);
+        args = args_get(PARSER, STATE, BREAKS, GRANTS, -1);
         if (list_size(args) == 0) {
             error(PARSER, "No arguments supplied to ANY OF");
             list_delete(args);
@@ -946,7 +1005,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
 
     /* DIFFRINT */
     if (parser_cmp(PARSER, "DIFFRINT")) {
-        struct list *args = args_get(PARSER, STATE, BREAKS, 2);
+        struct list *args = args_get(PARSER, STATE, BREAKS, GRANTS, 2);
         struct list *values = NULL;
         int types[2] = { NUMBR, NUMBAR };
         if (list_size(args) != 2) {
@@ -965,7 +1024,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
 
     /* SMOOSH */
     if (parser_cmp(PARSER, "SMOOSH")) {
-        struct list *args = args_get(PARSER, STATE, BREAKS, -1);
+        struct list *args = args_get(PARSER, STATE, BREAKS, GRANTS, -1);
         struct list *values = NULL;
         int types[1] = { YARN };
         if (list_size(args) == 0) {
@@ -985,8 +1044,9 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
 
     /* ... HAS A ... ITZ A */
     if (parser_cmp_at(PARSER, 1, "HAS")) {
+        enum access access;
         struct token *token = parser_get(PARSER);
-        struct value *target = value_lookup(STATE, token);
+        struct value *target = value_lookup(STATE, GRANTS, token, &access);
         struct value *value = NULL;
         if (!target) {
             error(PARSER, "Invalid assignment target");
@@ -995,6 +1055,10 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
         }
         if (target->type != BUKKIT) {
             error(PARSER, "Invalid assignment target type");
+            return NULL;
+        }
+        if (!(access & WRITE)) {
+            error(PARSER, "Assignment target is not writable");
             return NULL;
         }
         if (!parser_cmp(PARSER, "HAS")) {
@@ -1045,16 +1109,21 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
                     return NULL;
                 }
                 token = parser_get(PARSER);
-                parent = value_lookup(STATE, token);
+                parent = value_lookup(STATE, GRANTS, token, &access);
                 if (!parent) {
-                    error(PARSER, "Invalid parent");
+                    error(PARSER, "Invalid parent object");
+                    token_delete(token);
+                    return NULL;
+                }
+                if (!(access & READ)) {
+                    error(PARSER, "Parent object is not readable");
                     token_delete(token);
                     return NULL;
                 }
                 /* Should we keep track of parents, etc. ? */
                 value = value_copy(parent);
             }
-            else value = evaluate_expr(PARSER, STATE, BREAKS);
+            else value = evaluate_expr(PARSER, STATE, BREAKS, GRANTS);
             if (!value) {
                 error(PARSER, "Expected expression after `ITZ'");
                 token_delete(token);
@@ -1068,10 +1137,11 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
         return value_create_noob();
     }
 
-    /* ... R ... */
+    /* R */
     if (parser_cmp_at(PARSER, 1, "R")) {
+        enum access access;
         struct token *token = parser_get(PARSER);
-        struct value *target = token_to_value(STATE, token);
+        struct value *target = value_lookup(STATE, GRANTS, token, &access);
         struct value *value = NULL;
         /* Sanity check */
         if (!target) {
@@ -1079,10 +1149,14 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
             token_delete(token);
             return NULL;
         }
+        if (!(access & WRITE)) {
+            error(PARSER, "Assignment target is not writable");
+            return NULL;
+        }
         /* Remove the R from the token stream */
         parser_cmp(PARSER, "R");
         /* Retrieve the value to assign */
-        value = evaluate_expr(PARSER, STATE, BREAKS);
+        value = evaluate_expr(PARSER, STATE, BREAKS, GRANTS);
         if (!value) {
             error(PARSER, "Invalid assignment expression");
             return NULL;
@@ -1206,7 +1280,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
             /* OMG */
             list_delete(parser_seek_list(PARSER, find));
             if (parser_cmp(PARSER, "OMG")) {
-                struct value *value = evaluate_expr(PARSER, STATE, BREAKS);
+                struct value *value = evaluate_expr(PARSER, STATE, BREAKS, GRANTS);
                 if (!value) {
                     error(PARSER, "Expected expression after `OMG'");
                     list_delete(find);
@@ -1305,7 +1379,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
                 list_delete(parser_seek_list(PARSER, find));
                 /* MEBBE */
                 if (parser_cmp(PARSER, "MEBBE")) {
-                    if (!(expr = evaluate_expr(PARSER, STATE, BREAKS))) {
+                    if (!(expr = evaluate_expr(PARSER, STATE, BREAKS, GRANTS))) {
                         error(PARSER, "Expected expression after `MEBBE'");
                         list_delete(find);
                         return NULL;
@@ -1446,7 +1520,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
             state_save(value_get_bukkit(STATE));
             /* Perform guard check */
             parser = parser_create_bind(PARSER->name, guard);
-            result = evaluate_expr(parser, STATE, BREAKS);
+            result = evaluate_expr(parser, STATE, BREAKS, GRANTS);
             parser_delete(parser);
             if (!result || result->type != TROOF) {
                 error(PARSER, "Expected guard to return TROOF");
@@ -1458,7 +1532,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
                 breaks = list_create(data_delete_token, data_copy_token);
                 list_push_front(breaks, token_create_str(""));
                 parser = parser_create_bind(PARSER->name, body);
-                assert(!evaluate_parser(parser, STATE, breaks));
+                assert(!evaluate_parser(parser, STATE, breaks, GRANTS));
                 parser_delete(parser);
                 /* Check if we broke out of loop */
                 if (list_empty(breaks)) {
@@ -1469,7 +1543,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
                 list_delete(breaks);
                 /* Update loop variable */
                 parser = parser_create_bind(PARSER->name, update);
-                assert(!evaluate_parser(parser, STATE, BREAKS));
+                assert(!evaluate_parser(parser, STATE, BREAKS, GRANTS));
                 parser_delete(parser);
             }
             else {
@@ -1491,6 +1565,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
 
     /* HOW DUZ ..., IF U SAY SO */
     if (parser_cmp(PARSER, "HOW")) {
+        enum access access;
         struct token *token = NULL;
         struct item *head = NULL;
         struct list *args = NULL, *body = NULL;
@@ -1500,7 +1575,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
             return NULL;
         }
         token = parser_get(PARSER);
-        object = token_to_value(STATE, token);
+        object = value_lookup(STATE, GRANTS, token, &access);
         if (!object) {
             error(PARSER, "Expected variable after `HOW DUZ'");
             token_delete(token);
@@ -1508,6 +1583,10 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
         }
         if (object->type != BUKKIT) {
             error(PARSER, "Expected object after `HOW DUZ'");
+            return NULL;
+        }
+        if (!(access & WRITE)) {
+            error(PARSER, "Object is not writable");
             return NULL;
         }
         args = list_create(data_delete_token, data_copy_token);
@@ -1578,7 +1657,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
             error(PARSER, "Expected `YR' after `FOUND'");
             return NULL;
         }
-        if (!(value = evaluate_expr(PARSER, STATE, BREAKS))) {
+        if (!(value = evaluate_expr(PARSER, STATE, BREAKS, GRANTS))) {
             error(PARSER, "Expected expression after `FOUND YR'");
             return NULL;
         }
@@ -1586,6 +1665,20 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
         list_delete(parser_seek(PARSER, token->data));
         list_pop_front(BREAKS);
         return value;
+    }
+
+    /* MAH */
+    if (parser_cmp(PARSER, "MAH")) {
+        enum access access;
+        struct token *token = parser_get(PARSER);
+        struct value *value = value_lookup(STATE, GRANTS, token, &access);
+        if (!value) {
+            error(PARSER, "Variable does not exist");
+            token_delete(token);
+            return NULL;
+        }
+        list_push_front(GRANTS, value);
+        return value_create_noob();
     }
 
     /* We must be left with a value */
@@ -1601,7 +1694,11 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
 
     /* STATE */
     if (!(scope = scope_lookup(STATE, token))) scope = STATE;
-    if (value = value_lookup(STATE, token)) {
+    if (value = value_lookup(STATE, GRANTS, token, &access)) {
+        if (!(access && READ)) {
+            error(PARSER, "Value is not readable");
+            return NULL;
+        }
         if (value->type == NOOB) return value_cast_noob(value);
         if (value->type == TROOF) return value_cast_troof(value);
         if (value->type == NUMBR) return value_cast_numbr(value);
@@ -1610,20 +1707,21 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
         if (value->type == FUNKSHUN) {
             struct parser *parser = NULL;
             struct list *breaks = NULL;
+            struct list *grants = NULL;
             struct list *body = NULL;
             struct funkshun *funkshun = value_get_funkshun(value);
             struct value *result = NULL, *local = NULL;
             void *head = NULL;
             int status = 0;
             /* Retrieve all arguments */
-            struct list *args = args_get(PARSER, STATE, BREAKS, -1);
+            struct list *args = args_get(PARSER, STATE, BREAKS, GRANTS,
+                    list_size(funkshun->args));
             /* Check for correct arity */
             if (list_size(args) != list_size(funkshun->args)) {
                 error(PARSER, "Invalid number of arguments");
                 list_delete(args);
                 return NULL;
             }
-
             /* Populate local scope with arguments */
             local = value_create_bukkit(scope);
             if (list_size(funkshun->args) > 0) {
@@ -1642,27 +1740,28 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS)
             state_write(value_get_bukkit(local), "IT", value_create_noob());
             breaks = list_create(data_delete_token, data_copy_token);
             list_push_front(breaks, token_create_str(""));
+            grants = list_create(data_delete_null, data_copy_null);
             /* Copy function body, to enable recursion */
             body = list_copy(funkshun->body);
             parser = parser_create_bind(PARSER->name, body);
-            if (evaluate_parser(parser, local, breaks)) {
+            if (evaluate_parser(parser, local, breaks, grants)) {
+                list_delete(grants);
                 parser_delete(parser);
                 value_delete(local);
                 list_delete(body);
                 list_delete(breaks);
                 return NULL;
             }
+            list_delete(grants);
             parser_delete(parser);
             result = value_copy(state_read(value_get_bukkit(local), "IT"));
             value_delete(local);
-
             list_delete(body);
             list_delete(breaks);
             return result;
         }
         if (value->type == BUKKIT) {
-            /* TODO: Is there anything to do here? */
-            assert(0);
+            return value_copy(value);
         }
     }
 
@@ -1680,6 +1779,7 @@ main(int ARGC, char **ARGV)
     struct list *keep = NULL;
     struct list *breaks = NULL;
     struct value *state = NULL;
+    struct list *grants = NULL;
     FILE *file = stdin;
     int n, status;
 
@@ -1713,8 +1813,9 @@ main(int ARGC, char **ARGV)
 
     state = value_create_bukkit(NULL);
     breaks = list_create(data_delete_token, data_copy_token);
-    /* Note that we will never break from main body */
+    /* Note that we should never break from main body */
     list_push_front(breaks, token_create_str("KTHXBYE"));
+    grants = list_create(data_delete_null, data_copy_null);
 
     /* Initialize the default IT variable */
     state_write(value_get_bukkit(state), "IT", value_create_noob());
@@ -1738,9 +1839,10 @@ main(int ARGC, char **ARGV)
         goto DONE;
     }
 
-    status = evaluate_parser(parser, state, breaks);
+    status = evaluate_parser(parser, state, breaks, grants);
 
 DONE:
+    list_delete(grants);
     list_delete(breaks);
     value_delete(state);
     parser_delete(parser);

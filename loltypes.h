@@ -7,14 +7,9 @@
  *
  *      Justin J. Meza < justin dot meza at gmail dot com >
  *
- * TODO
- *
- *    - Create value_delete_* for each data type and implement them in
- *      lolcode.c.  Wait... why?
- *
  * LICENSE
  *
- *      Copyright (c) 2007 Justin J. Meza
+ *      Copyright (c) 2007-2010 Justin J. Meza
  *
  *      Permission is hereby granted, free of charge, to any person obtaining a
  *      copy of this software and associated documentation files (the
@@ -57,6 +52,11 @@ enum type {
 enum troof {
     FAIL,
     WIN,
+};
+
+enum access {
+    READ  = 0x0001,
+    WRITE = 0x0010,
 };
 
 struct funkshun {
