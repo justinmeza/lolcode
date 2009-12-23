@@ -541,30 +541,6 @@ evaluate_parser(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
          * expression appears but rathar at the beginning of a new line */
         if (parser_cmp(PARSER, "OBTW"))
             list_delete(parser_seek(PARSER, "TLDR"));
-        /* HAI */
-        else if (parser_cmp(PARSER, "HAI")) {
-            struct value *scope = NULL;
-            struct list *body = NULL;
-            struct parser *parser = NULL;
-            int status;
-            if (!parser_cmp(PARSER, "1.2") && !parser_cmp(PARSER, "1.3")
-                    && !parser_cmp_peek(PARSER, NULL)) {
-                error(PARSER, "Expected version after `HAI'");
-                return 1;
-            }
-            scope = value_create_bukkit(STATE);
-            body = parser_seek(PARSER, "KTHXBYE");
-            list_pop_front(body);      /* <NULL> */
-            list_pop_back(body);       /* KTHXBYE */
-            parser = parser_create_bind(PARSER->name, body);
-            status = evaluate_parser(parser, scope, BREAKS, ACCESS);
-            parser_delete(parser);
-            list_delete(body);
-            /* We cannot access scope from anywhere else, so don't name it */
-            state_write(value_get_bukkit(STATE), "", scope);
-            /* Report any errors */
-            if (status) return status;
-        }
         /* Evaluate an expression */
         else if (!(value = evaluate_expr(PARSER, STATE, BREAKS, ACCESS)))
             return 1;
@@ -592,6 +568,33 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
     assert(PARSER);
     assert(STATE);
     assert(BREAKS);
+
+    /* HAI */
+    if (parser_cmp(PARSER, "HAI")) {
+        struct value *scope = NULL;
+        struct list *body = NULL;
+        struct parser *parser = NULL;
+        if (!parser_cmp(PARSER, "1.2") && !parser_cmp(PARSER, "1.3")
+                && !parser_cmp_peek(PARSER, NULL)) {
+            error(PARSER, "Expected version after `HAI'");
+            return NULL;
+        }
+        scope = value_create_bukkit(STATE);
+        body = parser_seek(PARSER, "KTHXBYE");
+        list_pop_front(body);      /* <NULL> */
+        list_pop_back(body);       /* KTHXBYE */
+        parser = parser_create_bind(PARSER->name, body);
+        if (evaluate_parser(parser, scope, BREAKS, ACCESS)) {
+            parser_delete(parser);
+            list_delete(body);
+            return NULL;
+        }
+        parser_delete(parser);
+        list_delete(body);
+        /* We cannot access scope from anywhere else, so don't name it */
+        state_write(value_get_bukkit(STATE), "", scope);
+        return value_create_noob();
+    }
 
     /* VISIBLE */
     if (parser_cmp(PARSER, "VISIBLE")) {
