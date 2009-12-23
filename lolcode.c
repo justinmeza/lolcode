@@ -534,20 +534,42 @@ evaluate_parser(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
     assert(BREAKS);
     while (!parser_empty(PARSER)) {
         struct value *value = NULL;
+        /* Skip over any null tokens */
+        while (parser_cmp(PARSER, NULL));
         /* OBTW ... TLDR */
+        /* Note that this needs to be here because it cannot appear wherever an
+         * expression appears but rathar at the beginning of a new line */
         if (parser_cmp(PARSER, "OBTW"))
-                list_delete(parser_seek(PARSER, "TLDR"));
-        else {
-            /* KTHXBYE */
-            if (parser_cmp(PARSER, "KTHXBYE")) return 0;
-            /* Evaluate parser expressions */
-            else if (!(value = evaluate_expr(PARSER, STATE, BREAKS, ACCESS)))
+            list_delete(parser_seek(PARSER, "TLDR"));
+        /* HAI */
+        else if (parser_cmp(PARSER, "HAI")) {
+            struct value *scope = NULL;
+            struct list *body = NULL;
+            struct parser *parser = NULL;
+            int status;
+            if (!parser_cmp(PARSER, "1.2") && !parser_cmp(PARSER, "1.3")
+                    && !parser_cmp_peek(PARSER, NULL)) {
+                error(PARSER, "Expected version after `HAI'");
                 return 1;
+            }
+            scope = value_create_bukkit(STATE);
+            body = parser_seek(PARSER, "KTHXBYE");
+            list_pop_front(body);      /* <NULL> */
+            list_pop_back(body);       /* KTHXBYE */
+            parser = parser_create_bind(PARSER->name, body);
+            status = evaluate_parser(parser, scope, BREAKS, ACCESS);
+            parser_delete(parser);
+            list_delete(body);
+            /* We cannot access scope from anywhere else, so don't name it */
+            state_write(value_get_bukkit(STATE), "", scope);
+            /* Report any errors */
+            if (status) return status;
         }
+        /* Evaluate an expression */
+        else if (!(value = evaluate_expr(PARSER, STATE, BREAKS, ACCESS)))
+            return 1;
         /* Update IT */
         if (value) state_write(value_get_bukkit(STATE), "IT", value);
-        /* If the parser is empty, return */
-        if (parser_empty(PARSER)) return 0;
         /* We should be left with a null token */
         if (!parser_cmp(PARSER, NULL)) {
             error(PARSER, "Unexpected token");
@@ -1291,6 +1313,8 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
         }
         else list_delete(parser_seek(PARSER, token->data));
         list_pop_front(BREAKS);
+        /* If we read to the end, keep the null token */
+        if (parser_empty(PARSER)) parser_unget(PARSER);
         return value_create_noob();
     }
 
@@ -1690,6 +1714,8 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
         token = list_head(BREAKS);
         list_delete(parser_seek(PARSER, token->data));
         list_pop_front(BREAKS);
+        /* If we read to the end, keep the null token */
+        if (parser_empty(PARSER)) parser_unget(PARSER);
         return value;
     }
 
@@ -1862,25 +1888,6 @@ main(int ARGC, char **ARGV)
 
     /* Initialize the default IT variable */
     state_write(value_get_bukkit(state), "IT", value_create_noob());
-
-    /* OBTW ... TLDR */
-    if (parser_cmp(parser, "OBTW")) {
-        list_delete(parser_seek(parser, "TLDR"));
-        parser_cmp(parser, NULL);
-    }
-    /* HAI <VERSION> */
-    if (!parser_cmp(parser, "HAI")) {
-        error(parser, "Expected HAI token");
-        goto DONE;
-    }
-    if (!parser_cmp(parser, "1.3")) {
-        error(parser, "Invalid version number");
-        goto DONE;
-    }
-    if (!parser_cmp(parser, NULL)) {
-        error(parser, "Unexpected");
-        goto DONE;
-    }
 
     status = evaluate_parser(parser, state, breaks, access);
 

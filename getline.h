@@ -77,6 +77,8 @@ unsigned int get_line_at(char **LINEPTR, size_t *POS, size_t *N, FILE *STREAM)
 		if (!(*LINEPTR))
 			return -1; /* Malloc failed. Erk. */
 		*N=128;
+                /* Just in case EOF is reached before anything is stored */
+                (*LINEPTR)[0] = '\0';
 	}
 
 	while (1)
