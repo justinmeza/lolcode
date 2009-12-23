@@ -165,7 +165,7 @@ token_list_cmp(struct list *LIST, char *BUFFER, unsigned int SIZE)
 /* Functions for use with tokens */
 
     void
-token_print(void *DATA)
+token_print(const void *DATA)
     /* Prints a token's contents */
 {
     struct token *token = (struct token *)DATA;

@@ -54,11 +54,6 @@ enum troof {
     WIN,
 };
 
-enum access {
-    READ  = 0x0001,
-    WRITE = 0x0010,
-};
-
 struct funkshun {
     struct list *args;
     struct list *body;

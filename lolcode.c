@@ -60,6 +60,19 @@
 #include "loltypes.h"
 #include "lolfunc.h"
 
+enum access
+{
+    READ  = 0x0001,
+    WRITE = 0x0010,
+};
+
+struct symbol
+{
+    struct value *value;
+    struct value *parent;
+    enum access access;
+};
+
     void
 data_delete_list(void *DATA)
     /* Deletes pointers to lists */
@@ -303,7 +316,7 @@ token_to_value(struct value *STATE, struct token *TOKEN)
     assert(STATE);
     start = TOKEN->data;
     /* If ``I'', return global state */
-    if (!strcmp(TOKEN->data, "I")) return value;
+    if (!strcmp(TOKEN->data, "I")) return STATE;
     do {
         char *middle = NULL, *key = NULL;
         /* Find the next ``!'' */
@@ -352,7 +365,6 @@ token_to_value(struct value *STATE, struct token *TOKEN)
         free(key);
     }
     while (*end);
-    token_delete(TOKEN);
     return value;
 }
 
@@ -365,21 +377,22 @@ value_lookup(struct value *STATE, struct list *GRANTS, struct token *TOKEN,
      * in the current scope (STATE) or a pointer to the value is on the GRANT
      * list, ACCESS is set to FULL, otherwise ACCESS is set to READ.
      *
-     * +========+===========+=========+
-     * | SCOPE  | IN GRANT? | *ACCESS |
-     * +========+===========+=========+
-     * |        |    YES    |  FULL   |
-     * | STATE  +-----------+---------+
-     * |        |    NO     |  FULL   |
-     * +========+-----------+---------+
-     * |        |    YES    |  FULL   |
-     * | PARENT +-----------+---------+
-     * |        |    NO     |  READ   |
-     * +========+-----------+---------+
+     *                  +========+===========+=========+
+     *                  | SCOPE  | IN GRANT? | *ACCESS |
+     *                  +========+===========+=========+
+     *                  |        |    YES    |  FULL   |
+     *                  | STATE  +-----------+---------+
+     *                  |        |    NO     |  FULL   |
+     *                  +========+-----------+---------+
+     *                  |        |    YES    |  FULL   |
+     *                  | PARENT +-----------+---------+
+     *                  |        |    NO     |  READ   |
+     *                  +========+-----------+---------+
      */
 {
     struct value *scope = STATE;
     assert(STATE);
+    assert(GRANTS);
     assert(TOKEN);
     *ACCESS = READ | WRITE;            /* Read or write access by default */
     do {
@@ -387,7 +400,7 @@ value_lookup(struct value *STATE, struct list *GRANTS, struct token *TOKEN,
         if (value) {
             /* If not in the current state, return it if in access list */
             if (scope != STATE) {
-                if (GRANTS && !list_empty(GRANTS)) {
+                if (!list_empty(GRANTS)) {
                     void *head = list_head(GRANTS);
                     do {
                         struct value *item = (struct value *)list_head(GRANTS);
@@ -405,6 +418,134 @@ value_lookup(struct value *STATE, struct list *GRANTS, struct token *TOKEN,
     }
     while (scope);
     return NULL;
+}
+
+    struct symbol *
+token_to_symbol(struct value *STATE, struct list *ACCESS, struct token *TOKEN)
+{
+    enum access access = READ;
+    struct value *value = STATE, *state = NULL, *scope = STATE;
+    char *start = NULL, *end = NULL;
+    struct symbol *symbol = NULL;
+    assert(TOKEN);
+    assert(ACCESS);
+    assert(STATE);
+    /* If ``I'', we're done */
+    if (strcmp(TOKEN->data, "I")) {
+    do {
+        value = scope;
+        start = TOKEN->data;
+        do {
+            char *middle = NULL, *key = NULL;
+            /* Find the next ``!'' */
+            end = strchr(start, '!');
+            /* If none found, seek to end */
+            if (!end) end = strchr(start, '\0');
+            /* Extract the middle portion */
+            middle = malloc(sizeof(char) * (end - start + 1));
+            strncpy(middle, start, end - start);
+            middle[end - start] = '\0';
+            /* If at start or ``!'', read from state */
+            if (start == TOKEN->data || *(start - 1) == '!') key = middle;
+            /* Else, if not at start and ``?'', read from STATE */
+            else if (start != TOKEN->data && *(start - 1) == '?') {
+                struct value *read = NULL;
+                struct value *temp = NULL;
+                read = state_read(value_get_bukkit(STATE), middle);
+                if (!read) {
+                    value = NULL;
+                    break;
+                }
+                temp = value_cast_yarn(read);
+                if (!temp) {
+                    value = NULL;
+                    break;
+                }
+                free(middle);
+                key = malloc(sizeof(char) * (strlen(value_get_yarn(temp)) + 1));
+                strcpy(key, value_get_yarn(temp));
+                value_delete(temp);
+                start = end + 2;
+            }
+            else {
+                value = NULL;
+                break;
+            }
+            start = end + 2;
+            /* Resolve the next level */
+            value = state_read(value_get_bukkit(state = value), key);
+            if (!value) {
+                struct token *token = token_create_str(key);
+                struct value *numbr = token_to_numbr(token);
+                /* Create final NUMBR accesses on-the-fly */
+                if (start != TOKEN->data && !(*end) && numbr) {
+                    state_write(value_get_bukkit(state), key,
+                        value = value_create_noob());
+                    value_delete(numbr);
+                }
+                else {
+                    if (numbr) value_delete(numbr);
+                    else token_delete(token);
+                    value = NULL;
+                    break;
+                }
+            }
+            /* Check for access */
+            else if (!list_empty(ACCESS)) {
+                void *head = list_head(ACCESS);
+                do {
+                    struct value *item = (struct value *)list_head(ACCESS);
+                    if (item == value) access |= WRITE;
+                    list_shift_down(ACCESS);
+                }
+                while (list_head(ACCESS) != head);
+            }
+            free(key);
+        }
+        while (*end);
+        if (value) break;
+        scope = scope->parent;
+    }
+    while (scope);
+    }
+    /* Apply default access permissions if at local scope */
+    if (scope == STATE) access = READ | WRITE;
+    symbol = malloc(sizeof(struct symbol));
+    symbol->value = value;
+    symbol->parent = state;
+    symbol->access = access;
+    return symbol;
+}
+
+    enum access
+access_lookup(struct value *STATE, struct list *GRANTS, struct token *TOKEN)
+{
+    assert(STATE);
+    assert(GRANTS);
+    assert(TOKEN);
+    if (!list_empty(GRANTS)) {
+        void *head = list_head(GRANTS);
+        do {
+            struct value *item = (struct value *)list_head(GRANTS);
+            struct value *value = NULL;
+            char *start = TOKEN->data, *end = NULL;
+            /* Check for access at each level */
+            while (end = strchr(start, '!')) {
+                struct token *token = NULL;
+                char *temp = malloc(sizeof(char) * ((end - start) + 1));
+                strncpy(temp, start, end - start);
+                temp[end - start] = '\0';
+                token = token_create_str(temp);
+                value = token_to_value(STATE, token);
+                token_delete(token);
+                if (item == value) return READ & WRITE;
+                start = end + 2;
+            }
+            list_shift_down(GRANTS);
+        }
+        while (list_head(GRANTS) != head);
+    }
+    return READ;
 }
 
     struct value *
@@ -635,7 +776,6 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
                 if (!val) {
                     error(PARSER, "Invalid argument to VISIBLE");
                     list_delete(args);
-                    value_delete(val);
                     return NULL;
                 }
                 printf("%s", value_get_yarn(val));
@@ -1048,6 +1188,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
         struct token *token = parser_get(PARSER);
         struct value *target = value_lookup(STATE, GRANTS, token, &access);
         struct value *value = NULL;
+        token_delete(token);
         if (!target) {
             error(PARSER, "Invalid assignment target");
             token_delete(token);
@@ -1110,6 +1251,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
                 }
                 token = parser_get(PARSER);
                 parent = value_lookup(STATE, GRANTS, token, &access);
+                token_delete(token);
                 if (!parent) {
                     error(PARSER, "Invalid parent object");
                     token_delete(token);
@@ -1120,8 +1262,9 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
                     token_delete(token);
                     return NULL;
                 }
-                /* Should we keep track of parents, etc. ? */
+                /* Keep track of parent parent */
                 value = value_copy(parent);
+                value->parent = parent;
             }
             else value = evaluate_expr(PARSER, STATE, BREAKS, GRANTS);
             if (!value) {
@@ -1143,6 +1286,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
         struct token *token = parser_get(PARSER);
         struct value *target = value_lookup(STATE, GRANTS, token, &access);
         struct value *value = NULL;
+        token_delete(token);
         /* Sanity check */
         if (!target) {
             error(PARSER, "Invalid assignment target");
@@ -1341,77 +1485,130 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
         return value_create_noob();
     }
 
-    /* O RLY? */
+    /* O RLY? ... O HAI */
     if (parser_cmp(PARSER, "O")) {
-        struct value *value = NULL;
-        struct list *find = NULL;
-        if (!parser_cmp(PARSER, "RLY?")) {
-            error(PARSER, "Expected `RLY?' after `O'");
-            return NULL;
-        }
-        if (!(value = state_read(value_get_bukkit(STATE), "IT"))) return NULL;
-        /* Save current scope state, restore it before returning */
-        state_save(value_get_bukkit(STATE));
-        if (value_get_troof(value) == WIN) {
-            /* YA RLY */
-            find = list_create(data_delete_token, data_copy_token);
-            list_push_back(find, token_create_str("YA"));
-            list_push_back(find, token_create_str("OIC"));
-            list_delete(parser_seek_list(PARSER, find));
-            list_delete(find);
-            /* Found OIC */
-            if (!parser_cmp(PARSER, "YA")) return value_create_noob();
-            /* Found YA */
-            if (!parser_cmp(PARSER, "RLY")) {
-                error(PARSER, "Expected `RLY' after `YA'");
-                return NULL;
-            }
-            state_restore(value_get_bukkit(STATE));
-            return value_create_noob();
-        }
-        else {
-            struct value *expr = NULL;
-            find = list_create(data_delete_token, data_copy_token);
-            list_push_back(find, token_create_str("MEBBE"));
-            list_push_back(find, token_create_str("NO"));
-            list_push_back(find, token_create_str("OIC"));
-            while (!parser_empty(PARSER)) {
+        if (parser_cmp(PARSER, "RLY?")) {
+            struct value *value = NULL;
+            struct list *find = NULL;
+            if (!(value = state_read(value_get_bukkit(STATE), "IT"))) return NULL;
+            /* Save current scope state, restore it before returning */
+            state_save(value_get_bukkit(STATE));
+            if (value_get_troof(value) == WIN) {
+                /* YA RLY */
+                find = list_create(data_delete_token, data_copy_token);
+                list_push_back(find, token_create_str("YA"));
+                list_push_back(find, token_create_str("OIC"));
                 list_delete(parser_seek_list(PARSER, find));
-                /* MEBBE */
-                if (parser_cmp(PARSER, "MEBBE")) {
-                    if (!(expr = evaluate_expr(PARSER, STATE, BREAKS, GRANTS))) {
-                        error(PARSER, "Expected expression after `MEBBE'");
-                        list_delete(find);
-                        return NULL;
-                    }
-                    if (value_get_troof(expr) == FAIL) continue;
-                    /* TODO: Is this the proper way to handle IT? Modified only
-                     * when WIN?  At all? */
-                    state_write(value_get_bukkit(STATE), "IT", expr);
-                    list_delete(find);
-                    state_restore(value_get_bukkit(STATE));
-                    return value_create_noob();
+                list_delete(find);
+                /* Found OIC */
+                if (!parser_cmp(PARSER, "YA")) return value_create_noob();
+                /* Found YA */
+                if (!parser_cmp(PARSER, "RLY")) {
+                    error(PARSER, "Expected `RLY' after `YA'");
+                    return NULL;
                 }
-                /* NO WAI */
-                else if (parser_cmp(PARSER, "NO")) {
-                    if (parser_cmp(PARSER, "WAI")) {
+                state_restore(value_get_bukkit(STATE));
+                return value_create_noob();
+            }
+            else {
+                struct value *expr = NULL;
+                find = list_create(data_delete_token, data_copy_token);
+                list_push_back(find, token_create_str("MEBBE"));
+                list_push_back(find, token_create_str("NO"));
+                list_push_back(find, token_create_str("OIC"));
+                while (!parser_empty(PARSER)) {
+                    list_delete(parser_seek_list(PARSER, find));
+                    /* MEBBE */
+                    if (parser_cmp(PARSER, "MEBBE")) {
+                        if (!(expr = evaluate_expr(PARSER, STATE, BREAKS, GRANTS))) {
+                            error(PARSER, "Expected expression after `MEBBE'");
+                            list_delete(find);
+                            return NULL;
+                        }
+                        if (value_get_troof(expr) == FAIL) continue;
+                        /* TODO: Is this the proper way to handle IT? Modified only
+                         * when WIN?  At all? */
+                        state_write(value_get_bukkit(STATE), "IT", expr);
                         list_delete(find);
                         state_restore(value_get_bukkit(STATE));
                         return value_create_noob();
                     }
+                    /* NO WAI */
+                    else if (parser_cmp(PARSER, "NO")) {
+                        if (parser_cmp(PARSER, "WAI")) {
+                            list_delete(find);
+                            state_restore(value_get_bukkit(STATE));
+                            return value_create_noob();
+                        }
+                        else {
+                            error(PARSER, "Expected `WAI' after `NO'");
+                            list_delete(find);
+                            return NULL;
+                        }
+                    }
                     else {
-                        error(PARSER, "Expected `WAI' after `NO'");
+                        parser_cmp(PARSER, "OIC");
                         list_delete(find);
-                        return NULL;
+                        state_restore(value_get_bukkit(STATE));
+                        return value_create_noob();
                     }
                 }
-                else {
-                    parser_cmp(PARSER, "OIC");
-                    list_delete(find);
-                    state_restore(value_get_bukkit(STATE));
-                    return value_create_noob();
-                }
             }
+        }
+        else if (parser_cmp(PARSER, "HAI")) {
+            struct token *token = NULL;
+            struct value *state = NULL;
+            struct list *body = NULL, *breaks = NULL, *grants = NULL;
+            struct parser *parser = NULL;
+            if (!parser_cmp(PARSER, "IM")) {
+                error(PARSER, "Expected `IM' after `O HAI'");
+                return NULL;
+            }
+            token = parser_get(PARSER);
+            if (parser_cmp(PARSER, "IM")) {
+                enum access access;
+                struct token *parent = NULL;
+                struct value *value = NULL;
+                if (!parser_cmp(PARSER, "LIEK")) {
+                    error(PARSER, "Expected `LIEK' after `IM'");
+                    return NULL;
+                }
+                parent = parser_get(PARSER);
+                value = value_lookup(STATE, GRANTS, parent, &access);
+                if (!value) {
+                    error(PARSER, "Parent value does not exist");
+                    return NULL;
+                }
+                if (value->type != BUKKIT) {
+                    error(PARSER, "Invalid parent type");
+                    return NULL;
+                }
+                if (!(access & READ)) {
+                    error(PARSER, "Parent is not readable");
+                    return NULL;
+                }
+                /* Keep track of parent */
+                state = value_copy(value);
+                state->parent = value;
+            }
+            else state = value_create_bukkit(STATE);
+            body = parser_seek(PARSER, "KTHX");
+            list_pop_front(body);      /* <NULL> */
+            list_pop_back(body);       /* KTHX */
+            parser = parser_create_bind(PARSER->name, body);
+            breaks = list_create(data_delete_token, data_copy_token);
+            grants = list_create(data_delete_null, data_copy_null);
+            assert(!evaluate_parser(parser, state, breaks, grants));
+            list_delete(breaks);
+            list_delete(grants);
+            parser_delete(parser);
+            list_delete(body);
+            state_write(value_get_bukkit(STATE), token->data, state);
+            return value_create_noob();
+        }
+        else {
+            error(PARSER, "Expected token after `O'");
+            return NULL;
         }
     }
 
@@ -1576,6 +1773,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
         }
         token = parser_get(PARSER);
         object = value_lookup(STATE, GRANTS, token, &access);
+        token_delete(token);
         if (!object) {
             error(PARSER, "Expected variable after `HOW DUZ'");
             token_delete(token);
@@ -1669,9 +1867,11 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
 
     /* MAH */
     if (parser_cmp(PARSER, "MAH")) {
+        //struct list *args = args_get(PARSER, STATE, BREAKS, GRANTS, -1);
         enum access access;
         struct token *token = parser_get(PARSER);
         struct value *value = value_lookup(STATE, GRANTS, token, &access);
+        token_delete(token);
         if (!value) {
             error(PARSER, "Variable does not exist");
             token_delete(token);
@@ -1695,6 +1895,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
     /* STATE */
     if (!(scope = scope_lookup(STATE, token))) scope = STATE;
     if (value = value_lookup(STATE, GRANTS, token, &access)) {
+        token_delete(token);
         if (!(access && READ)) {
             error(PARSER, "Value is not readable");
             return NULL;
