@@ -343,81 +343,93 @@ token_to_symbol(struct value *STATE, struct list *ACCESS, struct token *TOKEN)
     assert(STATE);
     /* If ``I'', we're done */
     if (strcmp(TOKEN->data, "I")) {
-    do {
-        value = scope;
-        start = TOKEN->data;
         do {
-            char *middle = NULL, *key = NULL;
-            /* Find the next ``!'' */
-            end = strchr(start, '!');
-            /* If none found, seek to end */
-            if (!end) end = strchr(start, '\0');
-            /* Extract the middle portion */
-            middle = malloc(sizeof(char) * (end - start + 1));
-            strncpy(middle, start, end - start);
-            middle[end - start] = '\0';
-            /* If at start or ``!'', read from state */
-            if (start == TOKEN->data || *(start - 1) == '!') key = middle;
-            /* Else, if not at start and ``?'', read from STATE */
-            else if (start != TOKEN->data && *(start - 1) == '?') {
-                struct value *read = NULL;
-                struct value *temp = NULL;
-                read = state_read(value_get_bukkit(STATE), middle);
-                if (!read) {
-                    value = NULL;
-                    break;
-                }
-                temp = value_cast_yarn(read);
-                if (!temp) {
-                    value = NULL;
-                    break;
-                }
-                free(middle);
-                key = malloc(sizeof(char) * (strlen(value_get_yarn(temp)) + 1));
-                strcpy(key, value_get_yarn(temp));
-                value_delete(temp);
-                start = end + 2;
-            }
-            else {
-                value = NULL;
-                break;
-            }
-            start = end + 2;
-            /* Resolve the next level */
-            value = state_read(value_get_bukkit(state = value), key);
-            if (!value) {
-                struct token *token = token_create_str(key);
-                struct value *numbr = token_to_numbr(token);
-                /* Create final NUMBR accesses on-the-fly */
-                if (start != TOKEN->data && !(*end) && numbr) {
-                    state_write(value_get_bukkit(state), key,
-                        value = value_create_noob());
-                    value_delete(numbr);
+            value = scope;
+            start = TOKEN->data;
+            do {
+                char *middle = NULL, *key = NULL;
+                /* Find the next ``!'' */
+                end = strchr(start, '!');
+                /* If none found, seek to end */
+                if (!end) end = strchr(start, '\0');
+                /* Extract the middle portion */
+                middle = malloc(sizeof(char) * (end - start + 1));
+                strncpy(middle, start, end - start);
+                middle[end - start] = '\0';
+                /* If at start or ``!'', read from state */
+                if (start == TOKEN->data || *(start - 1) == '!') key = middle;
+                /* Else, if not at start and ``?'', read from STATE */
+                else if (start != TOKEN->data && *(start - 1) == '?') {
+                    struct value *read = NULL;
+                    struct value *temp = NULL;
+                    struct token *token = token_create_str(middle);
+                    struct symbol *symbol = token_to_symbol(STATE, ACCESS,
+                            token);
+                    enum access access;
+                    token_delete(token);
+                    read = symbol->value;
+                    access = symbol->access;
+                    free(symbol);
+                    if (!read) {
+                        value = NULL;
+                        break;
+                    }
+                    if (access != READONLY && access != READWRITE) {
+                        value = NULL;
+                        break;
+                    }
+                    temp = value_cast_yarn(read);
+                    if (!temp) {
+                        value = NULL;
+                        break;
+                    }
+                    free(middle);
+                    key = malloc(sizeof(char)
+                            * (strlen(value_get_yarn(temp)) + 1));
+                    strcpy(key, value_get_yarn(temp));
+                    value_delete(temp);
+                    start = end + 2;
                 }
                 else {
-                    if (numbr) value_delete(numbr);
-                    else token_delete(token);
                     value = NULL;
                     break;
                 }
-            }
-            /* Check for access */
-            else if (!list_empty(ACCESS)) {
-                void *head = list_head(ACCESS);
-                do {
-                    struct value *item = (struct value *)list_head(ACCESS);
-                    if (item == value) access = READWRITE;
-                    list_shift_down(ACCESS);
+                start = end + 2;
+                /* Resolve the next level */
+                value = state_read(value_get_bukkit(state = value), key);
+                if (!value) {
+                    struct token *token = token_create_str(key);
+                    struct value *numbr = token_to_numbr(token);
+                    /* Create final NUMBR accesses on-the-fly */
+                    if (start != TOKEN->data && !(*end) && numbr) {
+                        state_write(value_get_bukkit(state), key,
+                                value = value_create_noob());
+                        value_delete(numbr);
+                    }
+                    else {
+                        if (numbr) value_delete(numbr);
+                        else token_delete(token);
+                        value = NULL;
+                        break;
+                    }
                 }
-                while (list_head(ACCESS) != head);
+                /* Check for access */
+                else if (!list_empty(ACCESS)) {
+                    void *head = list_head(ACCESS);
+                    do {
+                        struct value *item = (struct value *)list_head(ACCESS);
+                        if (item == value) access = READWRITE;
+                        list_shift_down(ACCESS);
+                    }
+                    while (list_head(ACCESS) != head);
+                }
+                free(key);
             }
-            free(key);
+            while (*end);
+            if (value) break;
+            scope = scope->parent;
         }
-        while (*end);
-        if (value) break;
-        scope = scope->parent;
-    }
-    while (scope);
+        while (scope);
     }
     /* Apply default access permissions if at local scope */
     if (scope == STATE) access = READWRITE;
@@ -795,7 +807,6 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
         values = args_convert(args, types, 2);
         if (!values) {
             error(PARSER, "Invalid argument to SMALLR OF");
-            list_delete(values);
             return NULL;
         }
         return func_foldl(values, func_smallrof);
@@ -1328,7 +1339,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
         return value_create_noob();
     }
 
-    /* O RLY? ... O HAI */
+    /* O RLY?, O HAI */
     if (parser_cmp(PARSER, "O")) {
         if (parser_cmp(PARSER, "RLY?")) {
             struct value *value = NULL;
@@ -1581,7 +1592,13 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
                 breaks = list_create(data_delete_token, data_copy_token);
                 list_push_front(breaks, token_create_str(""));
                 parser = parser_create_bind(PARSER->name, body);
-                assert(!evaluate_parser(parser, STATE, breaks, ACCESS));
+                if (evaluate_parser(parser, STATE, breaks, ACCESS)) {
+                    error(PARSER, "Unable to evaluate");
+                    list_delete(breaks);
+                    value_delete(result);
+                    parser_delete(parser);
+                    return NULL;
+                }
                 parser_delete(parser);
                 /* Check if we broke out of loop */
                 if (list_empty(breaks)) {
@@ -1719,7 +1736,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
         list_pop_front(BREAKS);
         /* If we read to the end, keep the null token */
         if (parser_empty(PARSER)) parser_unget(PARSER);
-        return value;
+        return value_copy(value);
     }
 
     /* MAH */
@@ -1831,9 +1848,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
             list_delete(breaks);
             return result;
         }
-        if (value->type == BUKKIT) {
-            return value_copy(value);
-        }
+        if (value->type == BUKKIT) return value_copy(value);
     }
     free(symbol);
 
@@ -1854,27 +1869,22 @@ main(int ARGC, char **ARGV)
     struct list *access = NULL;
     FILE *file = stdin;
     int n, status;
-
     /* Print help text if appropriate */
     if (get_arg(ARGC, ARGV, 'h', &n)) {
         fprintf(stderr, "USAGE: lolcode [-f FILENAME]\n");
         status = 2;
         goto DONE;
     }
-
     ignore = list_create(data_delete_token, data_copy_token);
     list_push_back(ignore, token_create_str(" "));
     list_push_back(ignore, token_create_str("\t"));
     list_push_back(ignore, token_create_str("...\n"));
-
     keep = list_create(data_delete_token, data_copy_token);
     list_push_back(keep, token_create_str("\n"));
     list_push_back(keep, token_create_str(","));
     list_push_back(keep, token_create_str("\r"));
-
     /* Check for file on command line */
     if (get_arg(ARGC, ARGV, 'f', &n)) file = fopen(ARGV[n], "r");
-
     parser = parser_create(file,
             file == stdin ? "STDIN" : ARGV[n],
             ignore, keep, 0, parser_rules);
@@ -1882,18 +1892,15 @@ main(int ARGC, char **ARGV)
         fprintf(stderr, "Unable to open file.\n");
         goto DONE;
     }
-
+    /* Set up initial state */
     state = value_create_bukkit(NULL);
     breaks = list_create(data_delete_token, data_copy_token);
     /* Note that we should never break from main body */
     list_push_front(breaks, token_create_str("KTHXBYE"));
     access = list_create(data_delete_null, data_copy_null);
-
     /* Initialize the default IT variable */
     state_write(value_get_bukkit(state), "IT", value_create_noob());
-
     status = evaluate_parser(parser, state, breaks, access);
-
 DONE:
     list_delete(access);
     list_delete(breaks);
