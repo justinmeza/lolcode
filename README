@@ -8,8 +8,9 @@ MAINTAINER
 Y HELO THAR!!!1!
 
     This version of lolcode supports nearly all of the functionality described
-    in the LOLCODE 1.2 specification.  For more information, see
-    < http://lolcode.com/specs/1.2 >.
+    in the LOLCODE Version 1.2 language specification and some of the Version
+    1.3 proposals.  For more information, see < http://lolcode.com/specs/1.2 >
+    and < http://lolcode.com/proposals/1.3/1.3 > .
 
     To get started, just run ``make'' in this directory.  This will generate a
     binary file called ``lolcode''.
@@ -40,5 +41,10 @@ TODO
 
       - Unicode support.
 
-    If you really miss either of these, feel free to hack away at the source
-    and contribute to the project!
+    The following features from the work in progress on the 1.3 proposals still
+    need implementation:
+
+      - BUKKITs need to be updated when parent objects add members.
+
+    If you really miss any features, feel free to hack away at the source and
+    contribute to the project!
