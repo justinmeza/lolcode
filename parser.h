@@ -45,74 +45,36 @@
  *
  * USAGE
  *
- *      A parser object takes as its arguments a file name and two lists of
- *      tokens which we shall call "ignore" and "keep". The file is then
- *      _intuitively_ parsed as follows (*NOT* _actually_ for obvious lack of
- *      efficiency):
+ *      A parser object takes as its arguments a file name and three lists of
+ *      tokens which we shall call "ignore", "split", and "keep". The file is
+ *      then _intuitively_ parsed as follows (*NOT* _actually_ for obvious lack
+ *      of efficiency):
  *
  *      (1) Create tokens of strings of characters separated by any number of
  *      elements in the ignore list.
  *
  *      (2) From the set of newly-created tokens, for every token containing an
- *      element in the keep list, split it into up to three new tokens
- *      containing the portion of the old token *before* the keep token (if
- *      any), the keep token itself (this is guaranteed to be present and
+ *      element in the split list, split it into two new tokens consisting of
+ *      the portion of the old token *before* the split token (if any) and the
+ *      portion of the old token *after* the keep token (if any).
+ *
+ *      (3) From the same set of newly-created tokens, for every token
+ *      containing an element in the keep list, split it into up to three new
+ *      tokens containing the portion of the old token *before* the keep token
+ *      (if any), the keep token itself (this is guaranteed to be present and
  *      thus always be "kept" as a token), and the portion of the old token
  *      *after* the keep token (if any).
  *
- *      Thus, *NONE* of the tokens present in the ignore token list are kept in
- *      the token stream, and *ALL* tokens present in the keep token list are
- *      kept -- in place -- in the token stream. You may take these "rules" as
- *      invariants for the parser.
- *
- *      (Though this parser was effectively designed as a deterministic finite
- *      state machine, we will refrain from using any automata theory
- *      terminology and keep the discussion in "layman's terms.")
- *
- * EXAMPLE (OVERVIEW)
- *
- *      The road goes ever on an on,
- *          Down from the door where it began.
- *
- *      For example, the file containing "The road goes ever on and on,\n\tDown
- *      from the door where it began.\n\n" can be broken up many ways:
- *
- *      Ignoring "whitespace" (commonly, " ", "\n", and "\t") yields the
- *      individual tokens: "The", "road", "goes", "ever", "on", "and", "on,",
- *      "Down", "from", "the", "door", "where", "it", "began.".
- *
- *      But notice that we might want to actually delimit tokens by punctuation
- *      (splitting by whitespace alone keeps punctuation attached to the ends
- *      of tokens), too. If we add "," and "." to our list of tokens to ignore,
- *      this can be done.
- *
- *      Or, consider the practical application of simply ignoring "\n\n" *only*
- *      and tokenizing on the remaining text -- this will yield stanzas of text
- *      as tokens, for example.
- *
- *      There are many other ways to tokenize text but sometimes we want to do
- *      so and keep the token we split on in the token stream to provide the
- *      program parsing the file some extra context. For example, say we wanted
- *      to leave the period punctuation mark (".") in the token stream to
- *      signal the end of a sentence as its own token; this is one of the many
- *      times when keeping split tokens is required. After ignoring whitespace
- *      and keeping ".", our tokens will look like: "The", "road", "goes",
- *      "ever", "on", "and", "on,", "Down", "from", "the","door", "where",
- *      "it", "began", "." (notice the last token (a period) is all by itself,
- *      signaling the end of a sentence).
- *
- *      Of course there are many, *MANY*, other ways of breaking up text,
- *      uniquely suitable for this parser. There may be equally many ways of
- *      optimizing the process of parsing for certain workloads but for the
- *      sake of generality this exercise is left to the hacker for whom it is
- *      important. We'll provide some tweaks which can be employed in any
- *      scenario, below.
+ *      Thus, *NONE* of the tokens present in the ignore and split token lists
+ *      are kept in the token stream, and *ALL* tokens present in the keep token
+ *      list are kept--in place--in the token stream. You may take these "rules"
+ *      as invariants for the parser.
  *
  * TWEAKING
  *
  *      The simplest performance tweak involves placing the tokens you
- *      anticipate to appear most frequently in the ignore and keep lists
- *      toward the head of the list so they are matched earlier on during
+ *      anticipate to appear most frequently in the ignore, keep, and split
+ *      lists toward the head of the list so they are matched earlier on during
  *      comparison.
  *
  *      To help avoid some of the time penalty for disk access, the parser is
@@ -130,7 +92,7 @@
  *      ignored is _replaced_ by the token to keep). This is *okay* because it
  *      obeys our invariants for tokenizing: no elements of the ignore token
  *      list are present in the token stream and all elements of the split
- *      token list are kept -- in place -- in the token stream.
+ *      token list are kept--in place--in the token stream.
  *
  *      The result of ignoring tokens present within other tokens to ignore is
  *      undefined.
@@ -163,6 +125,7 @@ struct parser {
     unsigned int column;                /* Current column */
     unsigned int buffer;                /* File buffer size */
     struct list *ignore;
+    struct list *split;
     struct list *keep;
     struct list *tokens;
     struct list *history;
@@ -316,6 +279,7 @@ parser_create_bind(const char *NAME, struct list *LIST)
     strcpy(parser->name, NAME);
     parser->tokens = LIST;
     parser->ignore = NULL;
+    parser->split = NULL;
     parser->keep = NULL;
     parser->line = 0;
     parser->column = 0;
@@ -326,7 +290,8 @@ parser_create_bind(const char *NAME, struct list *LIST)
 }
 
     struct parser *
-parser_create(FILE *_FILE, const char *NAME, struct list *IGNORE, struct list *KEEP, unsigned int BUFFER,
+parser_create(FILE *_FILE, const char *NAME, struct list *IGNORE,
+        struct list *SPLIT, struct list *KEEP, unsigned int BUFFER,
         int (*RULES)(char *, size_t, unsigned int *, unsigned int *))
     /* Creates a new parser which reads from _FILE, splitting tokens separated
      * by strings in the IGNORE and KEEP lists, but leaving any tokens in KEEP
@@ -341,6 +306,7 @@ parser_create(FILE *_FILE, const char *NAME, struct list *IGNORE, struct list *K
     strcpy(parser->name, NAME);
     parser->tokens = list_create(data_delete_token, data_copy_token);
     parser->ignore = IGNORE;
+    parser->split = SPLIT;
     parser->keep = KEEP;
     parser->line = 0;
     parser->column = 0;
@@ -399,8 +365,9 @@ parser_get(struct parser *PARSER)
      * 0.2.1 If we were able to retrieve data,
      * 0.2.1.1 Apply some general rules which override others
      * 0.2.1.2 Check for any data to ignore but split tokens upon
-     * 0.2.1.3 Check for any data to keep and split tokens upon
-     * 0.2.1.4 Divide our input buffer into tokens
+     * 0.2.1.3 Check for any data to split tokens upon
+     * 0.2.1.4 Check for any data to keep and split tokens upon
+     * 0.2.1.5 Divide our input buffer into tokens
      * 1 Return the next token in the token stream
      * 2 Save the token in the parser's history */
 {
@@ -416,7 +383,7 @@ parser_get(struct parser *PARSER)
             ((struct token *)list_tail(PARSER->tokens))->null)) {
         char *buf = NULL;
         size_t len = 0, p = 0;
-        unsigned int start = 0, pos, ignore = 0, keep = 0, size, r;
+        unsigned int start = 0, pos, ignore = 0, keep = 0, split = 0, size, r;
     /* 0.1 Make sure our file is in an acceptable state */
         if (!PARSER->fd || feof(PARSER->fd)) break;
     /* 0.2 Get lines until we fill our buffer */
@@ -431,10 +398,13 @@ parser_get(struct parser *PARSER)
     /* 0.2.1.2 Check for any data to ignore but split tokens upon */
             if (PARSER->ignore) ignore =
                 token_list_cmp(PARSER->ignore, buf + pos, len - pos);
-    /* 0.2.1.3 Check for any data to keep and split tokens upon */
+    /* 0.2.1.3 Check for any data to split tokens upon */
+            if (PARSER->split) split =
+                token_list_cmp(PARSER->split, buf + pos, len - pos);
+    /* 0.2.1.4 Check for any data to keep and split tokens upon */
             if (PARSER->keep) keep =
                 token_list_cmp(PARSER->keep, buf + pos, len - pos);
-    /* 0.2.1.4 Divide our input buffer into tokens */
+    /* 0.2.1.5 Divide our input buffer into tokens */
             if (ignore || pos == len) {
                 if (pos > start) {
                     token = token_create(buf + start,
@@ -447,7 +417,7 @@ parser_get(struct parser *PARSER)
                 start = pos + ignore;
                 ignore = 0;
             }
-            else if (keep) {
+            else if (split) {
                 if (pos > start) {
                     token = token_create(buf + start,
                             pos - start,
@@ -469,7 +439,19 @@ parser_get(struct parser *PARSER)
                     if (!token || !token->null) list_push_back(PARSER->tokens,
                             token_create_null(PARSER->line));
                 }
-                start = pos + keep;
+                start = pos + split;
+                split = 0;
+            }
+            else if (keep) {
+                if (pos > start) {
+                    token = token_create(buf + start,
+                            pos - start,
+                            PARSER->line,
+                            start,
+                            0);
+                    list_push_back(PARSER->tokens, token);
+                }
+                start = pos;
                 keep = 0;
             }
         }
@@ -508,16 +490,10 @@ parser_cmp_at(struct parser *PARSER, unsigned int POS, const char *TOKEN)
     /* Seeks to an arbitrary position POS in the token stream and returns 1 if
      * the token value at that position is the same as STR and 0 if not. */
 {
-    /*
-    struct item *item = NULL;
-    */
     struct token *token = NULL;
     unsigned int n, i;
     int result = 1;
     assert(PARSER);
-    /*
-    if (list_size(PARSER->tokens) <= POS) return 0;
-    */
     /* Seek */
     for (n = 0; n <= POS; n++) {
         if (parser_empty(PARSER)) {
@@ -526,12 +502,6 @@ parser_cmp_at(struct parser *PARSER, unsigned int POS, const char *TOKEN)
         }
         token = parser_get(PARSER);
     }
-    /*
-    for (item = PARSER->tokens->head, n = 0;
-            item != NULL && n < POS;
-            n++, item = item->next) ;
-    token = (struct token *)item->data;
-    */
     /* Check for null tokens and token string equality */
     if (n > POS && ((!TOKEN && !token->null)
             || (TOKEN && strcmp(TOKEN, token->data))))

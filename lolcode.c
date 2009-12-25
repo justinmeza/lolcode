@@ -1906,6 +1906,7 @@ main(int ARGC, char **ARGV)
     struct parser *parser = NULL;
     struct list *ignore = NULL;
     struct list *keep = NULL;
+    struct list *split = NULL;
     struct list *breaks = NULL;
     struct value *state = NULL;
     struct list *access = NULL;
@@ -1921,15 +1922,17 @@ main(int ARGC, char **ARGV)
     list_push_back(ignore, token_create_str(" "));
     list_push_back(ignore, token_create_str("\t"));
     list_push_back(ignore, token_create_str("...\n"));
+    split = list_create(data_delete_token, data_copy_token);
+    list_push_back(split, token_create_str("\n"));
+    list_push_back(split, token_create_str(","));
+    list_push_back(split, token_create_str("\r"));
     keep = list_create(data_delete_token, data_copy_token);
-    list_push_back(keep, token_create_str("\n"));
-    list_push_back(keep, token_create_str(","));
-    list_push_back(keep, token_create_str("\r"));
+    list_push_back(keep, token_create_str("!"));
     /* Check for file on command line */
     if (get_arg(ARGC, ARGV, 'f', &n)) file = fopen(ARGV[n], "r");
     parser = parser_create(file,
             file == stdin ? "STDIN" : ARGV[n],
-            ignore, keep, 0, parser_rules);
+            ignore, split, keep, 0, parser_rules);
     if (!parser) {
         fprintf(stderr, "Unable to open file.\n");
         goto DONE;
@@ -1950,5 +1953,6 @@ DONE:
     parser_delete(parser);
     list_delete(ignore);
     list_delete(keep);
+    list_delete(split);
     return status;
 }
