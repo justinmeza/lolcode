@@ -100,8 +100,10 @@ parser_rules(char *BUF, size_t LEN, unsigned int *START, unsigned int *POS)
 {
     /* String literals */
     if (BUF[*POS] == '"') {
-        do if (BUF[(*POS)++] == '\n') return 1;
-        while (*POS < LEN && (BUF[*POS] != '"' || (*POS > 0 && BUF[*POS - 1] == ':')));
+        /* Seek to last " */
+        char *last = strrchr(BUF, '"');
+        *POS = last - BUF;
+        BUF = last + 1;
     }
     /* Single-line comments */
     if (!strncmp(BUF + *POS, "BTW", 3) && !(*POS > 0 && BUF[*POS - 1] == 'O')) {
@@ -282,7 +284,6 @@ token_to_yarn(struct parser *PARSER, struct value *STATE, struct list *ACCESS,
                 access = symbol->access;
                 free(symbol);
                 token_delete(token);
-                //value = state_read(value_get_bukkit(STATE), TOKEN->data + start);
                 if (!value) {
                     error(PARSER, "Invalid interpolation expression");
                     free(temp);
