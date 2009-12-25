@@ -1809,6 +1809,19 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
             || (value = token_to_troof(token))) 
         return value;
 
+    /* Check for terminating ``!'' */
+    if (strlen(token->data) > 1 && token->data[strlen(token->data) - 1] == '!') {
+        struct token *new = token_create_str("!");
+        list_push_front(PARSER->tokens, new);
+        token->data[strlen(token->data) - 1] = '\0';
+        if ((value = token_to_yarn(PARSER, STATE, ACCESS, token))
+                || (value = token_to_numbr(token))
+                || (value = token_to_numbar(token))
+                || (value = token_to_troof(token))) 
+            return value;
+    }
+
+
     /* STATE */
     symbol = token_to_symbol(STATE, ACCESS, token);
     if (symbol->value) {
