@@ -100,10 +100,10 @@ parser_rules(char *BUF, size_t LEN, unsigned int *START, unsigned int *POS)
 {
     /* String literals */
     if (BUF[*POS] == '"') {
-        /* Seek to last " */
-        char *last = strrchr(BUF, '"');
-        *POS = last - BUF;
-        BUF = last + 1;
+        do if (BUF[(*POS)++] == '\n') return 1;
+        while (*POS < LEN && (BUF[*POS] != '"'
+                || ((*POS > 0 && BUF[*POS - 1] == ':')
+                && (*POS > 1 && BUF[*POS - 2] != ':'))));
     }
     /* Single-line comments */
     if (!strncmp(BUF + *POS, "BTW", 3) && !(*POS > 0 && BUF[*POS - 1] == 'O')) {
