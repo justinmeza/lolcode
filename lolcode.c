@@ -211,8 +211,11 @@ token_to_numbar(struct token *TOKEN)
     return value_create_numbar(data);
 }
 
+struct symbol *token_to_symbol(struct value *, struct list *, struct token *);
+
     struct value *
-token_to_yarn(struct parser *PARSER, struct value *STATE, struct token *TOKEN)
+token_to_yarn(struct parser *PARSER, struct value *STATE, struct list *ACCESS,
+        struct token *TOKEN)
 {
     struct value *value = NULL;
     yarn temp;                          /* Constructs the YARN */
@@ -260,6 +263,9 @@ token_to_yarn(struct parser *PARSER, struct value *STATE, struct token *TOKEN)
                 struct value *value = NULL;
                 int start = n + 2;
                 int end = start;
+                struct token *token = NULL;
+                struct symbol *symbol = NULL;
+                enum access access;
                 /* Seek to end brace */
                 while (end < len - 1 && TOKEN->data[end] != '}') end++;
                 if (end == len - 1) {
@@ -270,12 +276,23 @@ token_to_yarn(struct parser *PARSER, struct value *STATE, struct token *TOKEN)
                 }
                 TOKEN->data[end] = '\0';
                 /* Retrieve variable value */
-                value = state_read(value_get_bukkit(STATE), TOKEN->data + start);
+                token = token_create_str(TOKEN->data + start);
+                symbol = token_to_symbol(STATE, ACCESS, token);
+                value = symbol->value;
+                access = symbol->access;
+                free(symbol);
+                token_delete(token);
+                //value = state_read(value_get_bukkit(STATE), TOKEN->data + start);
                 if (!value) {
                     error(PARSER, "Invalid interpolation expression");
                     free(temp);
                     token_delete(TOKEN);
                     return NULL;
+                }
+                if (access != READONLY && access != READWRITE) {
+                    error(PARSER, "Interpolation expression is not readable");
+                    free(temp);
+                    token_delete(TOKEN);
                 }
                 value = value_cast_yarn(value);
                 data = value_get_yarn(value);
@@ -287,7 +304,6 @@ token_to_yarn(struct parser *PARSER, struct value *STATE, struct token *TOKEN)
                 /* Clean up */
                 value_delete(value);
                 n = end;
-                break;
             }
             else {
                 error(PARSER, "Rogue escape character within YARN");
@@ -1789,7 +1805,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
     if (!token) return NULL;
 
     /* PRIMITIVE TYPES */
-    if ((value = token_to_yarn(PARSER, STATE, token))
+    if ((value = token_to_yarn(PARSER, STATE, ACCESS, token))
             || (value = token_to_numbr(token))
             || (value = token_to_numbar(token))
             || (value = token_to_troof(token))) 
