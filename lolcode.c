@@ -1548,6 +1548,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
                 return NULL;
             }
             var = parser_get(PARSER);
+            /*
             if (!state_read(value_get_bukkit(STATE), var->data)) {
                 error(PARSER, "Loop variable not found");
                 token_delete(name);
@@ -1555,6 +1556,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
                 token_delete(var);
                 return NULL;
             }
+            */
             /* Generate update */
             update = list_create(data_delete_token, data_copy_token);
             list_push_back(update, token_create_str(var->data));
@@ -1603,6 +1605,9 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
         list_pop_back(body);  /* YR */
         list_pop_back(body);  /* OUTTA */
         list_pop_back(body);  /* IM */
+        state_save(value_get_bukkit(STATE));
+        /* TODO: How should temporary variable be initialized? */
+        state_write(value_get_bukkit(STATE), var->data, value_create_numbr(0));
         /* Evaluate loop */
         while (1) {
             troof proceed = WIN;
@@ -1660,6 +1665,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
             token_delete(var);
             token_delete(op);
         }
+        state_restore(value_get_bukkit(STATE));
         list_delete(body);
         token_delete(name);
         return value_create_noob();
