@@ -1802,25 +1802,23 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
     token = parser_get(PARSER);
     if (!token) return NULL;
 
+    /* Split on terminating ``!'' */
+    if (strlen(token->data) > 1 && token->data[strlen(token->data) - 1] == '!') {
+        /* Get rid of the ``!'' */
+        token->data[strlen(token->data) - 1] = '\0';
+        /* Update the history */
+        list_pop_front(PARSER->history);
+        list_push_front(PARSER->history, token_copy(token));
+        /* Add the ``!'' to the token stream */
+        list_push_front(PARSER->tokens, token_create_str("!"));
+    }
+
     /* PRIMITIVE TYPES */
     if ((value = token_to_yarn(PARSER, STATE, ACCESS, token))
             || (value = token_to_numbr(token))
             || (value = token_to_numbar(token))
             || (value = token_to_troof(token))) 
         return value;
-
-    /* Check for terminating ``!'' */
-    if (strlen(token->data) > 1 && token->data[strlen(token->data) - 1] == '!') {
-        struct token *new = token_create_str("!");
-        list_push_front(PARSER->tokens, new);
-        token->data[strlen(token->data) - 1] = '\0';
-        if ((value = token_to_yarn(PARSER, STATE, ACCESS, token))
-                || (value = token_to_numbr(token))
-                || (value = token_to_numbar(token))
-                || (value = token_to_troof(token))) 
-            return value;
-    }
-
 
     /* STATE */
     symbol = token_to_symbol(STATE, ACCESS, token);
