@@ -526,8 +526,6 @@ args_convert(struct list *LIST, int *TYPES, unsigned int SIZE)
             list_delete(LIST);
             return NULL;
         }
-        /* Otherwise, move to next value */
-        list_pop_front(LIST);
     }
     list_delete(LIST);
     return list;
@@ -662,7 +660,6 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
         values = args_convert(args, types, 2);
         if (!values) {
             error(PARSER, "Invalid argument to SUM OF");
-            list_delete(values);
             return NULL;
         }
         /* Apply the appropriate operation */
@@ -687,7 +684,6 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
         values = args_convert(args, types, 2);
         if (!values) {
             error(PARSER, "Invalid argument to DIFF OF");
-            list_delete(values);
             return NULL;
         }
         return func_foldl(values, func_diffof);
@@ -711,7 +707,6 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
         values = args_convert(args, types, 2);
         if (!values) {
             error(PARSER, "Invalid argument to PRODUKT OF");
-            list_delete(values);
             return NULL;
         }
         return func_foldl(values, func_produktof);
@@ -723,7 +718,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
         struct list *values = NULL;
         int types[2] = { NUMBR, NUMBAR };
         if (!parser_cmp(PARSER, "OF")) {
-            error(PARSER, "Expected `OF' after `QHUSHUNT'");
+            error(PARSER, "Expected `OF' after `QUOSHUNT'");
             return NULL;
         }
         args = args_get(PARSER, STATE, BREAKS, ACCESS, 2);
@@ -735,7 +730,6 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
         values = args_convert(args, types, 2);
         if (!values) {
             error(PARSER, "Invalid argument to QUOSHUNT OF");
-            list_delete(values);
             return NULL;
         }
         return func_foldl(values, func_quoshuntof);
@@ -759,7 +753,6 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
         values = args_convert(args, types, 1);
         if (!values) {
             error(PARSER, "Invalid argument to MOD OF");
-            list_delete(values);
             return NULL;
         }
         return func_foldl(values, func_modof);
@@ -783,7 +776,6 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
         values = args_convert(args, types, 2);
         if (!values) {
             error(PARSER, "Invalid argument to BIGGR OF");
-            list_delete(values);
             return NULL;
         }
         return func_foldl(values, func_biggrof);
@@ -826,7 +818,6 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
             values = args_convert(args, types, 1);
             if (!values) {
                 error(PARSER, "Invalid argument to BOTH OF");
-                list_delete(values);
                 return NULL;
             }
             return func_foldl(values, func_bothof);
@@ -837,7 +828,7 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
             void *head = NULL;
             int types[2] = { NUMBR, NUMBAR };
             if (list_size(args) != 2) {
-                error(PARSER,"Wrong number of arguments to BOTH SAEM");
+                error(PARSER, "Wrong number of arguments to BOTH SAEM");
                 list_delete(args);
                 return NULL;
             }
@@ -845,14 +836,17 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
             do {
                 struct value *value = (struct value *)list_head(args);
                 list_shift_down(args);
-                if (value->type != NUMBR && value->type != NUMBAR) break;
+                if (value->type != NUMBR && value->type != NUMBAR) {
+                    list_delete(args);
+                    return value_create_troof(FAIL);
+                }
             }
             while (head != list_head(args));
-            if (head != list_head(args)) {
-                list_delete(args);
-                return value_create_troof(FAIL);
-            }
             values = args_convert(args, types, 2);
+            if (!values) {
+                error(PARSER, "Invalid argument to BOTH SAEM");
+                return NULL;
+            }
             return func_foldl(values, func_bothsaem);
         }
         else {
@@ -879,7 +873,6 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
         values = args_convert(args, types, 1);
         if (!values) {
             error(PARSER, "Invalid argument to EITHER OF");
-            list_delete(values);
             return NULL;
         }
         return func_foldl(values, func_eitherof);
@@ -903,7 +896,6 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
         values = args_convert(args, types, 1);
         if (!values) {
             error(PARSER, "Invalid argument to WON OF");
-            list_delete(values);
             return NULL;
         }
         return func_foldl(values, func_wonof);
@@ -924,10 +916,14 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
             return NULL;
         }
         values = args_convert(args, types, 1);
+        if (!values) {
+            error(PARSER, "Invalid argument to NOT");
+            return NULL;
+        }
         /* Apply the NOT operation */
         value = (struct value *)list_head(values);
         if (value->type != TROOF) {
-            error(PARSER, "Invalid argument to NOT");
+            error(PARSER, "Expected TROOF");
             list_delete(values);
             return NULL;
         }
@@ -955,7 +951,6 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
         values = args_convert(args, types, 1);
         if (!values) {
             error(PARSER, "Invalid argument to ALL OF");
-            list_delete(values);
             return NULL;
         }
         parser_cmp(PARSER, "MKAY");
@@ -983,7 +978,6 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
         values = args_convert(args, types, 1);
         if (!values) {
             error(PARSER, "Invalid argument to ANY OF");
-            list_delete(values);
             return NULL;
         }
         parser_cmp(PARSER, "MKAY");
@@ -998,15 +992,25 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
         struct list *args = args_get(PARSER, STATE, BREAKS, ACCESS, 2);
         struct list *values = NULL;
         int types[2] = { NUMBR, NUMBAR };
+        void *head = NULL;
         if (list_size(args) != 2) {
             error(PARSER, "Wrong number of arguments to DIFFRINT");
             list_delete(args);
             return NULL;
         }
+        head = list_head(args);
+        do {
+            struct value *value = (struct value *)list_head(args);
+            list_shift_down(args);
+            if (value->type != NUMBR && value->type != NUMBAR) {
+                list_delete(args);
+                return value_create_troof(FAIL);
+            }
+        }
+        while (head != list_head(args));
         values = args_convert(args, types, 2);
         if (!values) {
             error(PARSER, "Invalid argument to DIFFRINT");
-            list_delete(values);
             return NULL;
         }
         return func_foldl(values, func_diffrint);
@@ -1025,7 +1029,6 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
         values = args_convert(args, types, 1);
         if (!values) {
             error(PARSER, "Invalid argument to SMOOSH");
-            list_delete(values);
             return NULL;
         }
         parser_cmp(PARSER, "MKAY");
@@ -1253,6 +1256,13 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
          *     return NULL;
          * } */
         get_line(&line, &size, stdin);
+        /* TODO: Do we want to save the trailing newline? */
+        if (line[strlen(line) - 1] == '\n') {
+            if (line[strlen(line) - 1] == '\r') {
+                line[strlen(line) - 2] = '\0';
+            }
+            else line[strlen(line) - 1] = '\0';
+        }
         state_write(value_get_bukkit(STATE),
                 token->data, value_create_yarn(line));
         free(line);
@@ -1513,61 +1523,63 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
             return NULL;
         }
         name = parser_get(PARSER);
-        op = parser_get(PARSER);
-        if (!parser_cmp(PARSER, "YR")) {
-            error(PARSER, "Expected `YR' after loop operation");
-            token_delete(name);
-            token_delete(op);
-            return NULL;
-        }
-        var = parser_get(PARSER);
-        if (!state_read(value_get_bukkit(STATE), var->data)) {
-            error(PARSER, "Loop variable not found");
-            token_delete(name);
-            token_delete(op);
-            token_delete(var);
-            return NULL;
-        }
-        /* Generate update */
-        update = list_create(data_delete_token, data_copy_token);
-        list_push_back(update, token_create_str(var->data));
-        list_push_back(update, token_create_str("R"));
-        if (!strcmp(op->data, "UPPIN"))
-            list_push_back(update, token_create_str("SUM"));
-        else if (!strcmp(op->data, "NERFIN"))
-            list_push_back(update, token_create_str("DIFF"));
-        else {
-            error(PARSER, "Expected `UPPIN' or `NERFIN'");
-            token_delete(name);
-            token_delete(op);
-            token_delete(var);
-            list_delete(update);
-            return NULL;
-        }
-        list_push_back(update, token_create_str("OF"));
-        list_push_back(update, token_create_str(var->data));
-        list_push_back(update, token_create_str("AN"));
-        list_push_back(update, token_create_str("1"));
-        list_push_back(update, token_create_null(0));
-        /* Generate guard */
-        if (parser_cmp(PARSER, "TIL")) {
-            guard = parser_seek(PARSER, NULL);
-            list_push_front(guard, token_create_str("NOT"));
-        }
-        else if (parser_cmp(PARSER, "WILE"))
-            guard = parser_seek(PARSER, NULL);
-        else if (parser_cmp(PARSER, NULL)) {
-            guard = list_create(data_delete_token, data_copy_token);
-            list_push_back(guard, token_create_str("WIN"));
-            list_push_back(guard, token_create_null(0));
-        }
-        else {
-            error(PARSER, "Invalid loop condition; expected `TIL' or `WILE'");
-            token_delete(name);
-            token_delete(op);
-            token_delete(var);
-            list_delete(guard);
-            return NULL;
+        if (!parser_cmp_peek(PARSER, NULL)) {
+            op = parser_get(PARSER);
+            if (!parser_cmp(PARSER, "YR")) {
+                error(PARSER, "Expected `YR' after loop operation");
+                token_delete(name);
+                token_delete(op);
+                return NULL;
+            }
+            var = parser_get(PARSER);
+            if (!state_read(value_get_bukkit(STATE), var->data)) {
+                error(PARSER, "Loop variable not found");
+                token_delete(name);
+                token_delete(op);
+                token_delete(var);
+                return NULL;
+            }
+            /* Generate update */
+            update = list_create(data_delete_token, data_copy_token);
+            list_push_back(update, token_create_str(var->data));
+            list_push_back(update, token_create_str("R"));
+            if (!strcmp(op->data, "UPPIN"))
+                list_push_back(update, token_create_str("SUM"));
+            else if (!strcmp(op->data, "NERFIN"))
+                list_push_back(update, token_create_str("DIFF"));
+            else {
+                error(PARSER, "Expected `UPPIN' or `NERFIN'");
+                token_delete(name);
+                token_delete(op);
+                token_delete(var);
+                list_delete(update);
+                return NULL;
+            }
+            list_push_back(update, token_create_str("OF"));
+            list_push_back(update, token_create_str(var->data));
+            list_push_back(update, token_create_str("AN"));
+            list_push_back(update, token_create_str("1"));
+            list_push_back(update, token_create_null(0));
+            /* Generate guard */
+            if (parser_cmp(PARSER, "TIL")) {
+                guard = parser_seek(PARSER, NULL);
+                list_push_front(guard, token_create_str("NOT"));
+            }
+            else if (parser_cmp(PARSER, "WILE"))
+                guard = parser_seek(PARSER, NULL);
+            else if (parser_cmp(PARSER, NULL)) {
+                guard = list_create(data_delete_token, data_copy_token);
+                list_push_back(guard, token_create_str("WIN"));
+                list_push_back(guard, token_create_null(0));
+            }
+            else {
+                error(PARSER, "Invalid loop condition; expected `TIL' or `WILE'");
+                token_delete(name);
+                token_delete(op);
+                token_delete(var);
+                list_delete(guard);
+                return NULL;
+            }
         }
         /* Read in body */
         body = parser_seek(PARSER, (const char *)name->data);
@@ -1577,17 +1589,26 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
         list_pop_back(body);  /* IM */
         /* Evaluate loop */
         while (1) {
+            troof proceed = WIN;
             state_save(value_get_bukkit(STATE));
-            /* Perform guard check */
-            parser = parser_create_bind(PARSER->name, guard);
-            result = evaluate_expr(parser, STATE, BREAKS, ACCESS);
-            parser_delete(parser);
-            if (!result || result->type != TROOF) {
-                error(PARSER, "Expected guard to return TROOF");
+            if (guard) {
+                /* Perform guard check */
+                parser = parser_create_bind(PARSER->name, guard);
+                result = evaluate_expr(parser, STATE, BREAKS, ACCESS);
+                parser_delete(parser);
+                if (!result) {
+                    error(PARSER, "Invalid expression");
+                    return NULL;
+                }
+                if (result->type != TROOF) {
+                    error(PARSER, "Expected guard to return TROOF");
+                    value_delete(result);
+                    return NULL;
+                }
+                proceed = value_get_troof(result);
                 value_delete(result);
-                return NULL;
             }
-            if (value_get_troof(result) == WIN) {
+            if (proceed == WIN) {
                 /* Evaluate loop body */
                 breaks = list_create(data_delete_token, data_copy_token);
                 list_push_front(breaks, token_create_str(""));
@@ -1603,28 +1624,27 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
                 /* Check if we broke out of loop */
                 if (list_empty(breaks)) {
                     list_delete(breaks);
-                    value_delete(result);
                     break;
                 }
                 list_delete(breaks);
-                /* Update loop variable */
-                parser = parser_create_bind(PARSER->name, update);
-                assert(!evaluate_parser(parser, STATE, BREAKS, ACCESS));
-                parser_delete(parser);
+                if (update) {
+                    /* Update loop variable */
+                    parser = parser_create_bind(PARSER->name, update);
+                    assert(!evaluate_parser(parser, STATE, BREAKS, ACCESS));
+                    parser_delete(parser);
+                }
             }
-            else {
-                value_delete(result);
-                break;
-            }
-            value_delete(result);
+            else break;
             state_restore(value_get_bukkit(STATE));
         }
         state_restore(value_get_bukkit(STATE));
-        list_delete(guard);
+        if (guard) list_delete(guard);
+        if (update) {
+            list_delete(update);
+            token_delete(var);
+            token_delete(op);
+        }
         list_delete(body);
-        list_delete(update);
-        token_delete(var);
-        token_delete(op);
         token_delete(name);
         return value_create_noob();
     }
