@@ -396,13 +396,13 @@ parser_get(struct parser *PARSER)
     /* 0.2.1.1 Apply some general rules which override others */
             if (PARSER->rules && PARSER->rules(buf, len, &start, &pos)) break;
     /* 0.2.1.2 Check for any data to ignore but split tokens upon */
-            if (PARSER->ignore) ignore =
+            if (PARSER->ignore && !list_empty(PARSER->ignore)) ignore =
                 token_list_cmp(PARSER->ignore, buf + pos, len - pos);
     /* 0.2.1.3 Check for any data to split tokens upon */
-            if (PARSER->split) split =
+            if (PARSER->split && !list_empty(PARSER->split)) split =
                 token_list_cmp(PARSER->split, buf + pos, len - pos);
     /* 0.2.1.4 Check for any data to keep and split tokens upon */
-            if (PARSER->keep) keep =
+            if (PARSER->keep && !list_empty(PARSER->keep)) keep =
                 token_list_cmp(PARSER->keep, buf + pos, len - pos);
     /* 0.2.1.5 Divide our input buffer into tokens */
             if (ignore || pos == len) {
