@@ -596,6 +596,20 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
     assert(STATE);
     assert(BREAKS);
 
+    /* CAN HAS STDIO? */
+    if (parser_cmp(PARSER, "CAN")) {
+        if (!parser_cmp(PARSER, "HAS")) {
+            error(PARSER, "Expected `HAS' after `CAN'");
+            return NULL;
+        }
+        if (!parser_cmp(PARSER, "STDIO?")) {
+            error(PARSER, "Expected `STDIO?' after `CAN HAS'");
+            return NULL;
+        }
+        /* Do nothing */
+        return value_create_noob();
+    }
+
     /* HAI */
     if (parser_cmp(PARSER, "HAI")) {
         struct value *scope = NULL;
