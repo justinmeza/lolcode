@@ -496,6 +496,8 @@ parser_cmp_at(struct parser *PARSER, unsigned int POS, const char *TOKEN)
     assert(PARSER);
     /* Seek */
     for (n = 0; n <= POS; n++) {
+        if (token) token_delete(token);
+        token = NULL;
         if (parser_empty(PARSER)) {
             result = 0;
             break;
@@ -506,6 +508,7 @@ parser_cmp_at(struct parser *PARSER, unsigned int POS, const char *TOKEN)
     if (n > POS && ((!TOKEN && !token->null)
             || (TOKEN && strcmp(TOKEN, token->data))))
         result = 0;
+    if (token) token_delete(token);
     /* Rewind */
     for (i = 0; i <= n - 1; i++) parser_unget(PARSER);
     return result;
