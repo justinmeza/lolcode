@@ -388,7 +388,7 @@ parser_get(struct parser *PARSER)
         if (!PARSER->fd || feof(PARSER->fd)) break;
     /* 0.2 Get lines until we fill our buffer */
         do r = get_line_at(&buf, &p, &len, PARSER->fd);
-        while(r >= 0 && p < PARSER->buffer);
+        while(p < PARSER->buffer);
         len = strlen(buf);
     /* 0.2.1 If we were able to retrieve data, */
         if (buf == NULL || len == 0) continue;

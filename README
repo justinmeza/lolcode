@@ -1,3 +1,12 @@
+This project has been deprecated!  Please use the lci project instead:
+
+    https://github.com/justinmeza/lci
+
+lci is a much more robust and efficient LOLCODE interpreter.  Its homepage is
+located at: http://lolcode.org .
+
+---
+
                                     lolcode
                  An efficient LOLCODE interpreter written in C.
 

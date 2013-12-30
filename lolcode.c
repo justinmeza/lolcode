@@ -92,7 +92,9 @@ data_delete_null(void *DATA)
     void *
 data_copy_null(const void *DATA)
     /* Does not copy anything (used with ACCESS list) */
-{ }
+{
+    return NULL;
+}
 
     int
 parser_rules(char *BUF, size_t LEN, unsigned int *START, unsigned int *POS)
@@ -1349,7 +1351,8 @@ evaluate_expr(struct parser *PARSER, struct value *STATE, struct list *BREAKS,
      * be superficially evaluated as it is now? Basically, should IT be
      * affected by evaluating an `OMG' expression? If so, leave the evaluation
      * in. Otherwise, remove the next token so it is not parsed. */
-    if (parser_cmp(PARSER, "OMG"));
+    if (parser_cmp(PARSER, "OMG"))
+        ;
 
     /* GTFO */
     if (parser_cmp(PARSER, "GTFO")) {

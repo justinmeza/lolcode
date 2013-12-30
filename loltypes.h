@@ -35,6 +35,7 @@
 #define __LOLTYPES__
 
 #include <assert.h>
+#include <ctype.h>
 
 /* Structures and functions required for internal implementation. These need
  * not be dealt with directly. */
